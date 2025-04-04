@@ -1,0 +1,70 @@
+global:
+  tld: "example.com"
+  email: "admin@example.com"
+
+# Mandatory components
+shapeblock-operator:
+  image:
+    repository: "ghcr.io/kubenesthq/operator"
+    tag: "12-03-2025.23.02"
+    pullPolicy: "Always"
+  apiUrl: ""
+  credentials:
+    apiKey: ""
+    licenseKey: "ABC123"
+    licenseEmail: "test@example.com"
+  installCRDs: true
+
+buildwatch:
+  image:
+    repository: "ghcr.io/kubenesthq/buildwatch"
+    tag: "07-03-2025.09.50"
+    pullPolicy: "Always"
+  config:
+    inCluster: true
+    serverAddress: ":8080"
+    backendURL: ""
+    clusterKey: ""
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    host: "buildwatch.{{ .Values.global.tld }}"
+    tls: true
+    tlsSecret: "buildwatch-tls"
+
+# Optional components
+ingress:
+  enabled: false
+  controller:
+    service:
+      type: LoadBalancer
+
+certManager:
+  enabled: false
+  installCRDs: true
+
+registry:
+  enabled: false
+  persistence:
+    enabled: true
+    size: "10Gi"
+  ingress:
+    enabled: true
+    hosts:
+      - host: "registry.{{ .Values.global.tld }}"
+        paths:
+          - path: "/"
+            pathType: ImplementationSpecific
+    tls:
+      - secretName: "registry-tls"
+        hosts:
+          - "registry.{{ .Values.global.tld }}"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+  secrets:
+    htpasswd: ""
+  updateStrategy:
+    type: "Recreate"

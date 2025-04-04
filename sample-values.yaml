@@ -1,0 +1,29 @@
+global:
+  tld: "example.com"
+  email: "admin@example.com"
+
+# Mandatory components
+shapeblock-operator:
+  image:
+    tag: "12-03-2025.23.02"
+  apiUrl: "https://api.kubenest.io"
+
+  credentials:
+    apiKey: "14d8f9cf-567e-4a89-9866-e7fcb6b5efed"
+    licenseKey: "ABC123"
+    licenseEmail: "test@example.com"
+
+buildwatch:
+  config:
+    backendURL: "https://api.kubenest.io"
+    clusterKey: "14d8f9cf-567e-4a89-9866-e7fcb6b5efed"
+
+ingress:
+  enabled: true
+
+certManager:
+  enabled: true
+
+registry:
+  enabled: true
+

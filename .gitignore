@@ -1,0 +1,47 @@
+# Helm specific
+**/charts/*.tgz
+**/charts/*.tar.gz
+**/charts/*.tar
+**/charts/*.zip
+**/charts/*.lock
+**/charts/*.yaml.lock
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*~
+
+# IDE specific files
+.idea/
+.vscode/
+*.code-workspace
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Local values files
+values-*.yaml
+!values.yaml
+!values.schema.json
+
+# Test files
+**/tests/**/charts/
+**/tests/**/tmp/
+
+# Dependency files
+**/requirements.lock
+**/requirements.yaml
+
+# Generated files
+**/templates/*.yaml
+**/templates/*.yml
+**/templates/*.json
+**/templates/*.txt
+
+# Log files
+*.log
+
+output/
+.specstory
