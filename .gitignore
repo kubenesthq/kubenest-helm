@@ -45,3 +45,9 @@ values-*.yaml
 
 output/
 .specstory
+*.tgz
+*.tar.gz
+*.tar
+*.zip
+*.lock
+*.yaml.lock

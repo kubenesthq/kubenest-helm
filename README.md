@@ -138,6 +138,7 @@ helm push kubenest-0.1.1.tgz oci://ghcr.io/kubenesthq/charts
 4. To use the published chart:
 
 ```bash
+# Option 1: Using repository (recommended for frequent updates)
 # Add the repository
 helm repo add kubenesthq oci://ghcr.io/kubenesthq/charts
 
@@ -145,5 +146,8 @@ helm repo add kubenesthq oci://ghcr.io/kubenesthq/charts
 helm repo update
 
 # Install the chart
-helm install kubenest kubenesthq/kubenest -f values.yaml -n your-namespace
+helm install kubenest kubenesthq/kubenest -f values.yaml -n your-namespace --include-crds
+
+# Option 2: Direct OCI installation (useful for one-time installations)
+helm install kubenest oci://ghcr.io/kubenesthq/charts/kubenest -f values.yaml -n your-namespace --include-crds
 ```
