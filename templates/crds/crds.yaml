@@ -4,7 +4,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
+    meta.helm.sh/release-name: {{ .Release.Name }}
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
   name: projects.apps.shapeblock.io
+  labels:
+    app.kubernetes.io/managed-by: Helm
 spec:
   group: apps.shapeblock.io
   names:
@@ -85,7 +89,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
+    meta.helm.sh/release-name: {{ .Release.Name }}
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
   name: apps.apps.shapeblock.io
+  labels:
+    app.kubernetes.io/managed-by: Helm
 spec:
   group: apps.shapeblock.io
   names:
@@ -240,7 +248,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
+    meta.helm.sh/release-name: {{ .Release.Name }}
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
   name: appbuilds.apps.shapeblock.io
+  labels:
+    app.kubernetes.io/managed-by: Helm
 spec:
   group: apps.shapeblock.io
   names:
@@ -576,7 +588,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
+    meta.helm.sh/release-name: {{ .Release.Name }}
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
   name: services.apps.shapeblock.io
+  labels:
+    app.kubernetes.io/managed-by: Helm
 spec:
   group: apps.shapeblock.io
   names:
@@ -675,7 +691,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
+    meta.helm.sh/release-name: {{ .Release.Name }}
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
   name: stacks.apps.shapeblock.io
+  labels:
+    app.kubernetes.io/managed-by: Helm
 spec:
   group: apps.shapeblock.io
   names:
@@ -1013,7 +1033,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
+    meta.helm.sh/release-name: {{ .Release.Name }}
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
   name: stackdeploys.apps.shapeblock.io
+  labels:
+    app.kubernetes.io/managed-by: Helm
 spec:
   group: apps.shapeblock.io
   names:
