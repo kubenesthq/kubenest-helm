@@ -1,25 +1,24 @@
 apiVersion: v2
 name: kubenest
-description: A Helm chart for deploying cluster components including ingress, cert-manager, registry, operator and buildwatch
+description: A Helm chart for deploying Kubenest components - Operator and Buildwatch
 type: application
-version: 0.1.0
+version: 1.0.0
 appVersion: "1.0.0"
+
+maintainers:
+  - name: Kubenest Team
+    email: support@kubenest.io
+
 dependencies:
   - name: nginx-ingress-controller
-    version: 11.3.18
+    version: 11.6.13
     repository: https://charts.bitnami.com/bitnami
     condition: ingress.enabled
   - name: cert-manager
-    version: 1.3.16
+    version: 1.4.13
     repository: https://charts.bitnami.com/bitnami
     condition: certManager.enabled
   - name: docker-registry
     version: 2.2.3
     repository: https://helm.twun.io
     condition: registry.enabled
-  - name: shapeblock-operator
-    version: 1.0.1
-    repository: oci://ghcr.io/kubenesthq/charts
-  - name: buildwatch
-    version: 0.1.2
-    repository: oci://ghcr.io/kubenesthq/charts

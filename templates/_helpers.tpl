@@ -49,3 +49,13 @@ Selector labels
 app.kubernetes.io/name: {{ include "kubenest.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+{{/* Registry name */}}
+{{- define "registry.name" -}}
+{{- default "docker-registry" -}}
+{{- end -}}
+
+{{/* Registry fullname */}}
+{{- define "registry.fullname" -}}
+{{- printf "%s-%s" .Release.Name "docker-registry" | trunc 63 | trimSuffix "-" -}}
+{{- end -}}

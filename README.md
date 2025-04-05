@@ -1,4 +1,4 @@
-# Cluster Artefacts Helm Chart
+# Kubenest Helm Chart
 
 This Helm chart packages multiple Kubernetes components into a single umbrella chart. It includes:
 
@@ -27,17 +27,20 @@ helm repo update
 2. Create a values file with your configuration:
 
 ```yaml
-global:
-  tld: "your-domain.com"
-  email: "your-email@example.com"
+# Shared configuration
+tld: "your-domain.com"
+email: "your-email@example.com"
 
 # Mandatory components
-operator:
+shapeblock-operator:
+  image:
+    tag: "05-04-2025.09.57"
   apiUrl: "https://your-api-url"
   credentials:
-    apiKey: "your-api-key"
+    apiKey: "your-cluster-key"
     licenseKey: "your-license-key"
     licenseEmail: "your-email@example.com"
+  imported: true
 
 buildwatch:
   config:
@@ -64,11 +67,24 @@ helm dependency build
 4. Install the chart:
 
 ```bash
-# Install in a specific namespace
-helm install cluster-artefacts ./umbrella-chart -f values.yaml -n your-namespace
+# Option 1: Using values file
+helm install kubenest oci://ghcr.io/kubenesthq/charts/kubenest -f values.yaml -n your-namespace --include-crds
 
-# Or let Helm create a new namespace
-helm install cluster-artefacts ./umbrella-chart -f values.yaml --create-namespace -n your-namespace
+# Option 2: Using CLI values
+helm install kubenest oci://ghcr.io/kubenesthq/charts/kubenest \
+  --set shapeblock-operator.image.tag=05-04-2025.10.32 \
+  --set shapeblock-operator.credentials.apiKey=your-cluster-key \
+  --set buildwatch.config.clusterKey=your-cluster-key \
+  -n your-namespace \
+  --include-crds
+
+# Option 3: Using both values file and CLI overrides
+helm install kubenest ./kubenest \
+  -f values.yaml \
+  --set shapeblock-operator.credentials.apiKey=your-cluster-key \
+  --set buildwatch.config.clusterKey=your-cluster-key \
+  -n your-namespace \
+  --include-crds
 ```
 
 ## Configuration
@@ -77,10 +93,13 @@ The following table lists the configurable parameters of the chart and their def
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `global.tld` | Top-level domain for ingress hosts | `example.com` |
-| `global.email` | Email for cert-manager | `admin@example.com` |
-| `operator.apiUrl` | API URL for the operator | `""` |
-| `operator.credentials.apiKey` | API key for the operator | `""` |
+| `tld` | Top-level domain for ingress hosts | `kubenestapp.com` |
+| `email` | Email for cert-manager | `admin@example.com` |
+| `shapeblock-operator.image.tag` | Version of the operator to deploy | `"05-04-2025.09.57"` |
+| `shapeblock-operator.apiUrl` | API URL for the operator | `""` |
+| `shapeblock-operator.credentials.apiKey` | API key for the operator | `""` |
+| `shapeblock-operator.credentials.licenseKey` | License key for the operator | `""` |
+| `shapeblock-operator.credentials.licenseEmail` | License email for the operator | `""` |
 | `buildwatch.config.backendURL` | Backend URL for Buildwatch | `""` |
 | `buildwatch.config.clusterKey` | Cluster key for Buildwatch | `""` |
 | `ingress.enabled` | Enable Ingress Controller | `false` |
@@ -104,11 +123,12 @@ The chart has the following dependencies that are conditionally included based o
 - Make sure to provide all required credentials and URLs in the values file
 - The chart uses Helm's native dependency management for conditional installation of components
 - All components will be installed in the namespace specified during helm install (via `-n` flag)
+- When using `helm template`, include the `--include-crds` flag to generate CRD manifests
 
 ## Testing
 
 ```bash
-helm template . -f sample-values.yaml --output-dir ./output
+helm template . -f sample-values.yaml --output-dir ./output --include-crds
 ```
 
 ## Packaging and Publishing to GitHub Packages

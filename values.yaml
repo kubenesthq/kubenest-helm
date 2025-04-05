@@ -1,69 +1,78 @@
-global:
-  tld: "example.com"
-  email: "admin@example.com"
+# Shared configuration
+tld: "my-cluster.kubenestapp.com"
+email: "admin@example.com"
+apiUrl: "https://api.kubenest.io"
+apiKey: ""
+operatorVersion: "05-04-2025.09.57"
 
-# Mandatory components
-shapeblock-operator:
+# Operator configuration
+operator:
+  debug: false
+  deleteFailedJobs: true
+  imported: true
   image:
     repository: "ghcr.io/kubenesthq/operator"
-    tag: "12-03-2025.23.02"
     pullPolicy: "Always"
-  apiUrl: ""
-  credentials:
-    apiKey: ""
-    licenseKey: "ABC123"
-    licenseEmail: "test@example.com"
-  installCRDs: true
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
 
-buildwatch:
-  image:
-    repository: "ghcr.io/kubenesthq/buildwatch"
-    tag: "07-03-2025.09.50"
-    pullPolicy: "Always"
-  config:
-    inCluster: true
-    serverAddress: ":8080"
-    backendURL: ""
-    clusterKey: ""
-  ingress:
-    enabled: true
-    className: "nginx"
-    annotations:
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    host: "buildwatch.{{ .Values.global.tld }}"
-    tls: true
-    tlsSecret: "buildwatch-tls"
+# Metrics configuration
+metrics:
+  port: 8443
+  service:
+    create: true
+    type: ClusterIP
+
+# Health probe configuration
+healthProbe:
+  port: 8081
+  livenessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 20
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+# Leader election configuration
+leaderElection:
+  enabled: false
+
+credentials:
+  licenseKey: "ABC123"
+  licenseEmail: "test@example.com"
+
+serviceAccount:
+  name: kubenest-operator
+  create: true
+
+# Buildwatch configuration
+buildwatchImage:
+  repository: "ghcr.io/kubenesthq/buildwatch"
+  tag: "07-03-2025.09.50"
+  pullPolicy: "Always"
+buildwatchConfig:
+  inCluster: true
+  serverAddress: ":8080"
 
 # Optional components
 ingress:
-  enabled: false
-  controller:
-    service:
-      type: LoadBalancer
+  enabled: true
 
 certManager:
-  enabled: false
-  installCRDs: true
+  enabled: true
 
 registry:
-  enabled: false
+  enabled: true
+  ingress:
+    enabled: false
   persistence:
     enabled: true
     size: "10Gi"
-  ingress:
-    enabled: true
-    hosts:
-      - host: "registry.{{ .Values.global.tld }}"
-        paths:
-          - path: "/"
-            pathType: ImplementationSpecific
-    tls:
-      - secretName: "registry-tls"
-        hosts:
-          - "registry.{{ .Values.global.tld }}"
-    annotations:
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"
-      nginx.ingress.kubernetes.io/proxy-body-size: "0"
   secrets:
     htpasswd: ""
   updateStrategy:

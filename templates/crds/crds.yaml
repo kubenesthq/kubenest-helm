@@ -1,0 +1,1216 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: projects.apps.shapeblock.io
+spec:
+  group: apps.shapeblock.io
+  names:
+    kind: Project
+    listKind: ProjectList
+    plural: projects
+    singular: project
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display Name
+      type: string
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Project is the Schema for the projects API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ProjectSpec defines the desired state of Project
+            properties:
+              description:
+                description: Description of the project
+                type: string
+              displayName:
+                description: DisplayName is the human-readable name of the project
+                type: string
+              registrySecret:
+                description: RegistrySecret references a secret containing registry
+                  credentials
+                type: string
+            type: object
+          status:
+            description: ProjectStatus defines the observed state of Project
+            properties:
+              lastUpdated:
+                description: Last time the status was updated
+                format: date-time
+                type: string
+              message:
+                description: Human-readable message
+                type: string
+              phase:
+                description: Current phase of the project
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: apps.apps.shapeblock.io
+spec:
+  group: apps.shapeblock.io
+  names:
+    kind: App
+    listKind: AppList
+    plural: apps
+    singular: app
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display Name
+      type: string
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: App is the Schema for the apps API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AppSpec defines the desired state of App
+            properties:
+              build:
+                description: Build configuration template
+                properties:
+                  builderImage:
+                    description: Builder image for buildpack builds
+                    type: string
+                  image:
+                    description: Prebuilt image to deploy
+                    type: string
+                  type:
+                    description: 'Type of build: dockerfile, buildpack, or image'
+                    enum:
+                    - dockerfile
+                    - buildpack
+                    - image
+                    type: string
+                required:
+                - type
+                type: object
+              description:
+                description: Description of the application
+                type: string
+              displayName:
+                description: DisplayName is the human-readable name of the application
+                type: string
+              git:
+                description: Git repository configuration
+                properties:
+                  branch:
+                    description: Branch to use by default
+                    type: string
+                  isPrivate:
+                    description: IsPrivate indicates if the git repository is private
+                    type: boolean
+                  secretName:
+                    description: Secret name containing git credentials
+                    type: string
+                  url:
+                    description: URL of the git repository
+                    type: string
+                required:
+                - url
+                type: object
+              helmChart:
+                description: HelmChart configuration for deployment
+                properties:
+                  defaultValues:
+                    description: Default values to use with the chart
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  name:
+                    description: Name of the Helm chart
+                    type: string
+                  repository:
+                    description: Repository URL for the Helm chart
+                    type: string
+                  version:
+                    description: Version of the Helm chart
+                    type: string
+                required:
+                - name
+                - repository
+                - version
+                type: object
+              registry:
+                description: Registry configuration for storing built images
+                properties:
+                  secretName:
+                    description: Secret name containing registry credentials
+                    type: string
+                  url:
+                    description: URL of the container registry
+                    type: string
+                type: object
+              subpath:
+                description: Subpath within the repository to build from
+                type: string
+            required:
+            - build
+            - displayName
+            - registry
+            type: object
+          status:
+            description: AppStatus defines the observed state of App
+            properties:
+              lastUpdated:
+                description: Last time the status was updated
+                format: date-time
+                type: string
+              latestBuild:
+                description: Latest successful build
+                type: string
+              message:
+                description: Human-readable message
+                type: string
+              phase:
+                description: Current phase of the application
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: appbuilds.apps.shapeblock.io
+spec:
+  group: apps.shapeblock.io
+  names:
+    kind: AppBuild
+    listKind: AppBuildList
+    plural: appbuilds
+    singular: appbuild
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.appName
+      name: App
+      type: string
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AppBuild is the Schema for the appbuilds API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AppBuildSpec defines the desired state of AppBuild
+            properties:
+              appName:
+                description: AppName references the App CR
+                type: string
+              buildNodeAffinity:
+                description: |-
+                  BuildNodeAffinity defines the node affinity settings for build jobs
+                  This affects where Kaniko and Buildpack jobs are scheduled
+                properties:
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                    description: |-
+                      The scheduler will prefer to schedule pods to nodes that satisfy
+                      the affinity expressions specified by this field, but it may choose
+                      a node that violates one or more of the expressions. The node that is
+                      most preferred is the one with the greatest sum of weights, i.e.
+                      for each node that meets all of the scheduling requirements (resource
+                      request, requiredDuringScheduling affinity expressions, etc.),
+                      compute a sum by iterating through the elements of this field and adding
+                      "weight" to the sum if the node matches the corresponding matchExpressions; the
+                      node(s) with the highest sum are the most preferred.
+                    items:
+                      description: |-
+                        An empty preferred scheduling term matches all objects with implicit weight 0
+                        (i.e. it's a no-op). A null preferred scheduling term matches no objects (i.e. is also a no-op).
+                      properties:
+                        preference:
+                          description: A node selector term, associated with the corresponding
+                            weight.
+                          properties:
+                            matchExpressions:
+                              description: A list of node selector requirements by
+                                node's labels.
+                              items:
+                                description: |-
+                                  A node selector requirement is a selector that contains values, a key, and an operator
+                                  that relates the key and values.
+                                properties:
+                                  key:
+                                    description: The label key that the selector applies
+                                      to.
+                                    type: string
+                                  operator:
+                                    description: |-
+                                      Represents a key's relationship to a set of values.
+                                      Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      An array of string values. If the operator is In or NotIn,
+                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                      the values array must be empty. If the operator is Gt or Lt, the values
+                                      array must have a single element, which will be interpreted as an integer.
+                                      This array is replaced during a strategic merge patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                              x-kubernetes-list-type: atomic
+                            matchFields:
+                              description: A list of node selector requirements by
+                                node's fields.
+                              items:
+                                description: |-
+                                  A node selector requirement is a selector that contains values, a key, and an operator
+                                  that relates the key and values.
+                                properties:
+                                  key:
+                                    description: The label key that the selector applies
+                                      to.
+                                    type: string
+                                  operator:
+                                    description: |-
+                                      Represents a key's relationship to a set of values.
+                                      Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      An array of string values. If the operator is In or NotIn,
+                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                      the values array must be empty. If the operator is Gt or Lt, the values
+                                      array must have a single element, which will be interpreted as an integer.
+                                      This array is replaced during a strategic merge patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        weight:
+                          description: Weight associated with matching the corresponding
+                            nodeSelectorTerm, in the range 1-100.
+                          format: int32
+                          type: integer
+                      required:
+                      - preference
+                      - weight
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                    description: |-
+                      If the affinity requirements specified by this field are not met at
+                      scheduling time, the pod will not be scheduled onto the node.
+                      If the affinity requirements specified by this field cease to be met
+                      at some point during pod execution (e.g. due to an update), the system
+                      may or may not try to eventually evict the pod from its node.
+                    properties:
+                      nodeSelectorTerms:
+                        description: Required. A list of node selector terms. The
+                          terms are ORed.
+                        items:
+                          description: |-
+                            A null or empty node selector term matches no objects. The requirements of
+                            them are ANDed.
+                            The TopologySelectorTerm type implements a subset of the NodeSelectorTerm.
+                          properties:
+                            matchExpressions:
+                              description: A list of node selector requirements by
+                                node's labels.
+                              items:
+                                description: |-
+                                  A node selector requirement is a selector that contains values, a key, and an operator
+                                  that relates the key and values.
+                                properties:
+                                  key:
+                                    description: The label key that the selector applies
+                                      to.
+                                    type: string
+                                  operator:
+                                    description: |-
+                                      Represents a key's relationship to a set of values.
+                                      Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      An array of string values. If the operator is In or NotIn,
+                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                      the values array must be empty. If the operator is Gt or Lt, the values
+                                      array must have a single element, which will be interpreted as an integer.
+                                      This array is replaced during a strategic merge patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                              x-kubernetes-list-type: atomic
+                            matchFields:
+                              description: A list of node selector requirements by
+                                node's fields.
+                              items:
+                                description: |-
+                                  A node selector requirement is a selector that contains values, a key, and an operator
+                                  that relates the key and values.
+                                properties:
+                                  key:
+                                    description: The label key that the selector applies
+                                      to.
+                                    type: string
+                                  operator:
+                                    description: |-
+                                      Represents a key's relationship to a set of values.
+                                      Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      An array of string values. If the operator is In or NotIn,
+                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                      the values array must be empty. If the operator is Gt or Lt, the values
+                                      array must have a single element, which will be interpreted as an integer.
+                                      This array is replaced during a strategic merge patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        type: array
+                        x-kubernetes-list-type: atomic
+                    required:
+                    - nodeSelectorTerms
+                    type: object
+                    x-kubernetes-map-type: atomic
+                type: object
+              buildVars:
+                description: Additional build environment variables
+                items:
+                  properties:
+                    key:
+                      description: Name of the build variable
+                      type: string
+                    value:
+                      description: Value of the build variable
+                      type: string
+                  required:
+                  - key
+                  - value
+                  type: object
+                type: array
+              gitRef:
+                description: Git reference to build (commit SHA)
+                type: string
+              helmValues:
+                description: HelmValues for deployment
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              imageTag:
+                description: ImageTag for this specific build
+                type: string
+            required:
+            - appName
+            type: object
+          status:
+            description: AppBuildStatus defines the observed state of AppBuild
+            properties:
+              buildEndTime:
+                description: Time when the build process completed (before deployment
+                  phase)
+                format: date-time
+                type: string
+              buildStartTime:
+                description: Time when the actual build process started (when pod
+                  starts running)
+                format: date-time
+                type: string
+              completionTime:
+                format: date-time
+                type: string
+              failedHelmJobName:
+                description: Name of the first failed helm job, used to track original
+                  failure
+                type: string
+              gitCommit:
+                description: Git commit SHA of the code being built
+                type: string
+              imageTag:
+                description: Image tag for the built container
+                type: string
+              message:
+                description: Human-readable message
+                type: string
+              phase:
+                default: Pending
+                description: Current phase of the build
+                enum:
+                - Pending
+                - Building
+                - Deploying
+                - Completed
+                - Failed
+                type: string
+              podName:
+                description: |-
+                  Build pod details for log streaming
+                  Only set for dockerfile and buildpack builds
+                type: string
+              startTime:
+                description: Timestamps
+                format: date-time
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: services.apps.shapeblock.io
+spec:
+  group: apps.shapeblock.io
+  names:
+    kind: Service
+    listKind: ServiceList
+    plural: services
+    singular: service
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .status.url
+      name: URL
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Service is the Schema for the services API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ServiceSpec defines the desired state of Service
+            properties:
+              chart:
+                description: Chart configuration
+                properties:
+                  name:
+                    description: Name of the chart
+                    type: string
+                  repo:
+                    description: Predefined repository name (e.g., "bitnami", "stable")
+                    type: string
+                  repoURL:
+                    description: Custom repository URL
+                    type: string
+                  version:
+                    description: Version of the chart
+                    type: string
+                required:
+                - name
+                type: object
+              helmValues:
+                description: Raw helm values to be passed to the chart
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+            required:
+            - chart
+            type: object
+          status:
+            description: ServiceStatus defines the observed state of Service
+            properties:
+              helmRelease:
+                description: Name of the Helm release
+                type: string
+              message:
+                description: Human-readable message indicating details about current
+                  phase
+                type: string
+              phase:
+                description: 'Current phase of the service: Pending, Deploying, Deployed,
+                  Failed'
+                type: string
+              url:
+                description: URL where the service is accessible
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: stacks.apps.shapeblock.io
+spec:
+  group: apps.shapeblock.io
+  names:
+    kind: Stack
+    listKind: StackList
+    plural: stacks
+    singular: stack
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display Name
+      type: string
+    - jsonPath: .spec.version
+      name: Version
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Stack is the Schema for the stacks API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: StackSpec defines the desired state of a Stack
+            properties:
+              components:
+                description: |-
+                  Components that make up this stack
+                  Required if HelmChart is not specified
+                items:
+                  description: StackComponent defines a component in the stack
+                  properties:
+                    app:
+                      description: App configuration if Kind is App
+                      properties:
+                        git:
+                          description: Git configuration if Type is git
+                          properties:
+                            buildType:
+                              description: Build type (buildpack or dockerfile)
+                              enum:
+                              - buildpack
+                              - dockerfile
+                              type: string
+                            dockerfilePath:
+                              description: Path to Dockerfile (only for dockerfile
+                                build type)
+                              type: string
+                            ref:
+                              description: Git branch or tag
+                              type: string
+                            url:
+                              description: Git repository URL
+                              type: string
+                          required:
+                          - buildType
+                          - ref
+                          - url
+                          type: object
+                        helm:
+                          description: Helm configuration if Type is helm
+                          properties:
+                            defaultValues:
+                              description: Default values to use with the chart
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                            imageTagMapping:
+                              description: ImageTagMapping defines how the imageTag
+                                from AppBuild maps to Helm values
+                              properties:
+                                path:
+                                  description: Path in the Helm values where the imageTag
+                                    should be applied
+                                  type: string
+                              required:
+                              - path
+                              type: object
+                            name:
+                              description: Name of the Helm chart
+                              type: string
+                            repository:
+                              description: Repository URL for the Helm chart
+                              type: string
+                            version:
+                              description: Version of the Helm chart
+                              type: string
+                          required:
+                          - name
+                          - repository
+                          - version
+                          type: object
+                        helmValues:
+                          description: Helm values that can reference parameters
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        image:
+                          description: Image configuration if Type is image
+                          properties:
+                            image:
+                              description: Image reference
+                              type: string
+                            tag:
+                              description: Image tag
+                              type: string
+                          required:
+                          - image
+                          - tag
+                          type: object
+                        type:
+                          description: Type of the app (image, git, helm)
+                          enum:
+                          - image
+                          - git
+                          - helm
+                          type: string
+                      required:
+                      - type
+                      type: object
+                    customizable:
+                      description: Whether this component can be customized in StackDeploy
+                      type: boolean
+                    kind:
+                      description: Kind of the component (App or Service)
+                      enum:
+                      - App
+                      - Service
+                      type: string
+                    name:
+                      description: Name of the component
+                      type: string
+                    service:
+                      description: Service configuration if Kind is Service
+                      properties:
+                        chart:
+                          description: Chart configuration
+                          properties:
+                            name:
+                              description: Name of the chart
+                              type: string
+                            repo:
+                              description: Predefined repository name (e.g., "bitnami",
+                                "stable")
+                              type: string
+                            repoURL:
+                              description: Custom repository URL
+                              type: string
+                            version:
+                              description: Version of the chart
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        helmValues:
+                          description: Raw helm values to be passed to the chart
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                      required:
+                      - chart
+                      type: object
+                  required:
+                  - customizable
+                  - kind
+                  - name
+                  type: object
+                type: array
+              description:
+                description: Description of the stack
+                type: string
+              displayName:
+                description: DisplayName is the human-readable name
+                type: string
+              helmChart:
+                description: |-
+                  Single Helm chart for the entire stack
+                  Required if Components is not specified
+                properties:
+                  defaultValues:
+                    description: Default values to use with the chart
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  imageTagMapping:
+                    description: ImageTagMapping defines how the imageTag from AppBuild
+                      maps to Helm values
+                    properties:
+                      path:
+                        description: Path in the Helm values where the imageTag should
+                          be applied
+                        type: string
+                    required:
+                    - path
+                    type: object
+                  name:
+                    description: Name of the Helm chart
+                    type: string
+                  repository:
+                    description: Repository URL for the Helm chart
+                    type: string
+                  version:
+                    description: Version of the Helm chart
+                    type: string
+                required:
+                - name
+                - repository
+                - version
+                type: object
+              parameters:
+                description: Parameters that can be used in component configurations
+                items:
+                  description: Parameter defines a parameter that can be used in component
+                    configurations
+                  properties:
+                    default:
+                      description: Default value for the parameter
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    description:
+                      description: Description of the parameter
+                      type: string
+                    name:
+                      description: Name of the parameter
+                      type: string
+                    type:
+                      description: Type hint for UI/validation (will be used in future)
+                      enum:
+                      - string
+                      - number
+                      - boolean
+                      - password
+                      - object
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              version:
+                description: Version of this stack template
+                type: string
+            required:
+            - displayName
+            - version
+            type: object
+          status:
+            description: StackStatus defines the observed state of a Stack
+            properties:
+              conditions:
+                description: Conditions represent the latest available observations
+                  of the stack's state
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              lastUpdated:
+                description: Last time the status was updated
+                format: date-time
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: stackdeploys.apps.shapeblock.io
+spec:
+  group: apps.shapeblock.io
+  names:
+    kind: StackDeploy
+    listKind: StackDeployList
+    plural: stackdeploys
+    singular: stackdeploy
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.stackRef
+      name: Stack
+      type: string
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: StackDeploy is the Schema for the stackdeploys API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: StackDeploySpec defines the desired state of a StackDeploy
+            properties:
+              additionalValues:
+                description: Additional Helm values to merge with generated values
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              componentOverrides:
+                additionalProperties:
+                  description: ComponentOverride defines overrides for a component
+                  properties:
+                    gitRef:
+                      description: Git reference to use for App components
+                      type: string
+                    helmValues:
+                      description: Helm values to override
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    imageTag:
+                      description: Image tag to use for App components with image
+                        type
+                      type: string
+                  type: object
+                description: Component-specific overrides
+                type: object
+              parameters:
+                description: Parameter values for this deployment
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              registry:
+                description: Registry configuration for storing and pulling images
+                properties:
+                  secretName:
+                    description: Secret name containing registry credentials
+                    type: string
+                  url:
+                    description: URL of the container registry
+                    type: string
+                type: object
+              stackRef:
+                description: Reference to the Stack template
+                type: string
+            required:
+            - stackRef
+            type: object
+          status:
+            description: StackDeployStatus defines the observed state of a StackDeploy
+            properties:
+              components:
+                description: Status of individual components
+                items:
+                  description: ComponentStatus defines the status of an individual
+                    component
+                  properties:
+                    appRef:
+                      description: Reference to the created App CR
+                      type: string
+                    message:
+                      description: Message about the component status
+                      type: string
+                    name:
+                      description: Name of the component
+                      type: string
+                    phase:
+                      description: Phase of the component
+                      enum:
+                      - Pending
+                      - Deploying
+                      - Ready
+                      - Failed
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              conditions:
+                description: Conditions represent the latest available observations
+                  of the deployment's state
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              lastUpdated:
+                description: Last time the status was updated
+                format: date-time
+                type: string
+              message:
+                description: Human-readable message
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed
+                  by the controller
+                format: int64
+                type: integer
+              phase:
+                description: Current phase of the deployment
+                enum:
+                - Pending
+                - Deploying
+                - Ready
+                - Failed
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

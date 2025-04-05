@@ -1,6 +1,5 @@
-global:
-  tld: "example.com"
-  email: "admin@example.com"
+tld: "kubenestapp.com"
+email: "admin@example.com"
 
 # Mandatory components
 shapeblock-operator:
@@ -12,6 +11,7 @@ shapeblock-operator:
     apiKey: "14d8f9cf-567e-4a89-9866-e7fcb6b5efed"
     licenseKey: "ABC123"
     licenseEmail: "test@example.com"
+  imported: true
 
 buildwatch:
   config:
