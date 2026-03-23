@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-hub
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hub
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8001
+      targetPort: ws
+      protocol: TCP
+      name: ws
+  selector:
+    app.kubernetes.io/component: hub
+    app.kubernetes.io/instance: {{ .Release.Name }}

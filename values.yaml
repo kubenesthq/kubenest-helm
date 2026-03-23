@@ -1,79 +1,127 @@
-# Shared configuration
-tld: "my-cluster.kubenestapp.com"
-email: "admin@example.com"
-apiUrl: "https://api.kubenest.io"
-apiKey: ""
-operatorVersion: "05-04-2025.09.57"
+# -- Domain for ingress resources (e.g. kubenest.example.com)
+domain: "kubenest.example.com"
 
-# Operator configuration
-operator:
-  debug: false
-  deleteFailedJobs: true
-  imported: true
+# -- Shared JWT secret for backend <-> hub <-> operator auth
+# Generate with: openssl rand -hex 32
+jwtSecret: ""
+
+# -- Namespace for kubenest (usually set via helm install -n)
+# namespace: kubenest-system
+
+# --- Backend (FastAPI) ---
+backend:
   image:
-    repository: "ghcr.io/kubenesthq/operator"
-    pullPolicy: "Always"
+    repository: ghcr.io/kubenesthq/kubenest-backend
+    tag: "latest"
+    pullPolicy: Always
+  replicas: 1
   resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
     limits:
       cpu: 500m
       memory: 512Mi
+  ingress:
+    enabled: true
+    # -- Override hostname (default: api.<domain>)
+    host: ""
+    annotations: {}
+  # -- Initial admin user
+  admin:
+    email: "admin@kubenest.io"
+    password: "changeme"
+
+# --- Hub (Go WebSocket relay) ---
+hub:
+  image:
+    repository: ghcr.io/kubenesthq/kubenest-hub
+    tag: "latest"
+    pullPolicy: Always
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  ingress:
+    enabled: true
+    # -- Override hostname (default: hub.<domain>)
+    host: ""
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      nginx.org/websocket-services: "{{ .Release.Name }}-hub"
+
+# --- UI (Next.js) ---
+ui:
+  image:
+    repository: ghcr.io/kubenesthq/kubenest-ui
+    tag: "latest"
+    pullPolicy: Always
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  ingress:
+    enabled: true
+    # -- Override hostname (default: app.<domain>)
+    host: ""
+    annotations: {}
+
+# --- Operator ---
+operator:
+  enabled: true
+  image:
+    repository: ghcr.io/kubenesthq/operatorv2
+    tag: "latest"
+    pullPolicy: Always
+  resources:
     requests:
       cpu: 100m
       memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  # -- Bootstrap components (set false since prep script installs these)
+  bootstrap:
+    argocd:
+      enabled: true
+    certManager:
+      enabled: false
+    ingressNginx:
+      enabled: false
+    vault:
+      enabled: false
+  # -- GitOps repo for operator manifests
+  gitops:
+    repoURL: ""
+    branch: "main"
+    token: ""
 
-# Metrics configuration
-metrics:
-  port: 8443
-  service:
-    create: true
-    type: ClusterIP
-
-# Health probe configuration
-healthProbe:
-  port: 8081
-  livenessProbe:
-    initialDelaySeconds: 15
-    periodSeconds: 20
-  readinessProbe:
-    initialDelaySeconds: 5
-    periodSeconds: 10
-
-# Leader election configuration
-leaderElection:
-  enabled: false
-
-credentials:
-  licenseKey: "ABC123"
-  licenseEmail: "test@example.com"
-
-serviceAccount:
-  name: kubenest-operator
-  create: true
-
-# Buildwatch configuration
-buildwatchImage:
-  repository: "ghcr.io/kubenesthq/buildwatch"
-  tag: "07-03-2025.09.50"
-  pullPolicy: "Always"
-buildwatchConfig:
-  inCluster: true
-  serverAddress: ":8080"
-
-# Optional components
-ingress:
+# --- PostgreSQL (Bitnami) ---
+postgresql:
   enabled: true
+  auth:
+    username: kubenest
+    password: ""
+    database: kubenest
+  primary:
+    persistence:
+      size: 5Gi
 
-certManager:
+# --- Redis (Bitnami) ---
+redis:
   enabled: true
-
-registry:
-  enabled: true
-  ingress:
+  architecture: standalone
+  auth:
     enabled: false
-  persistence:
-    enabled: true
-    size: "10Gi"
-  secrets:
-    htpasswd: ""
-  updateStrategy:
-    type: "Recreate"
+  master:
+    persistence:
+      size: 1Gi

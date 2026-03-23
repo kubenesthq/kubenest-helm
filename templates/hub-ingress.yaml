@@ -1,0 +1,35 @@
+{{- if .Values.hub.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-hub
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hub
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    {{- with .Values.hub.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - {{ include "kubenest.hub.host" . }}
+      secretName: {{ .Release.Name }}-hub-tls
+  rules:
+    - host: {{ include "kubenest.hub.host" . }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-hub
+                port:
+                  number: 8001
+{{- end }}

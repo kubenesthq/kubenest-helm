@@ -1,12 +1,9 @@
 dependencies:
-- name: nginx-ingress-controller
+- name: postgresql
   repository: https://charts.bitnami.com/bitnami
-  version: 11.6.13
-- name: cert-manager
+  version: 16.4.1
+- name: redis
   repository: https://charts.bitnami.com/bitnami
-  version: 1.4.13
-- name: docker-registry
-  repository: https://helm.twun.io
-  version: 2.2.3
-digest: sha256:3635bf89af102741433d181ca0a4c5b12bf9ceb9842d1f7cf46b9107859531a0
-generated: "2025-04-05T21:07:36.609924+05:30"
+  version: 20.6.2
+digest: sha256:cfe1430ac1c4e64797d80879173085fea117691b9bd52f82e3825520b65b3441
+generated: "2026-03-23T21:15:39.278726+05:30"

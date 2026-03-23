@@ -1,0 +1,80 @@
+{{- if .Values.operator.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-operator
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: operator
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: operator
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ .Release.Name }}-operator
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 65532
+      containers:
+        - name: operator
+          image: "{{ .Values.operator.image.repository }}:{{ .Values.operator.image.tag }}"
+          imagePullPolicy: {{ .Values.operator.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65532
+          ports:
+            - name: health
+              containerPort: 8081
+            - name: metrics
+              containerPort: 8080
+          env:
+            - name: BACKEND_URL
+              value: "wss://{{ include "kubenest.hub.host" . }}/ws/operator"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: jwt-secret
+            - name: OPERATOR_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            {{- if .Values.operator.gitops.repoURL }}
+            - name: GIT_REPO_URL
+              value: {{ .Values.operator.gitops.repoURL | quote }}
+            - name: GIT_REPO_BRANCH
+              value: {{ .Values.operator.gitops.branch | quote }}
+            - name: GIT_TOKEN
+              value: {{ .Values.operator.gitops.token | quote }}
+            {{- end }}
+            - name: BOOTSTRAP_ARGOCD
+              value: {{ .Values.operator.bootstrap.argocd.enabled | quote }}
+            - name: BOOTSTRAP_CERTMANAGER
+              value: {{ .Values.operator.bootstrap.certManager.enabled | quote }}
+            - name: BOOTSTRAP_INGRESSNGINX
+              value: {{ .Values.operator.bootstrap.ingressNginx.enabled | quote }}
+            - name: BOOTSTRAP_VAULT
+              value: {{ .Values.operator.bootstrap.vault.enabled | quote }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.operator.resources | nindent 12 }}
+{{- end }}

@@ -1,24 +1,21 @@
 apiVersion: v2
 name: kubenest
-description: A Helm chart for deploying Kubenest components - Operator and Buildwatch
+description: Deploy the full KubeNest stack — backend, hub, UI, operator, postgres, redis
 type: application
-version: 1.0.0
-appVersion: "1.0.0"
+version: 2.0.0
+appVersion: "2.0.0"
 
 maintainers:
   - name: Kubenest Team
     email: support@kubenest.io
 
 dependencies:
-  - name: nginx-ingress-controller
-    version: 11.6.13
+  - name: postgresql
+    version: "16.4.1"
     repository: https://charts.bitnami.com/bitnami
-    condition: ingress.enabled
-  - name: cert-manager
-    version: 1.4.13
+    condition: postgresql.enabled
+
+  - name: redis
+    version: "20.6.2"
     repository: https://charts.bitnami.com/bitnami
-    condition: certManager.enabled
-  - name: docker-registry
-    version: 2.2.3
-    repository: https://helm.twun.io
-    condition: registry.enabled
+    condition: redis.enabled

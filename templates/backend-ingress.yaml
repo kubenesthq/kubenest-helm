@@ -1,0 +1,31 @@
+{{- if .Values.backend.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-backend
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    {{- with .Values.backend.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - {{ include "kubenest.backend.host" . }}
+      secretName: {{ .Release.Name }}-backend-tls
+  rules:
+    - host: {{ include "kubenest.backend.host" . }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-backend
+                port:
+                  number: 8000
+{{- end }}

@@ -6,9 +6,7 @@ Expand the name of the chart.
 {{- end }}
 
 {{/*
-Create a default fully qualified app name.
-We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
-If release name contains chart name it will be used as a full name.
+Fully qualified app name, truncated to 63 chars.
 */}}
 {{- define "kubenest.fullname" -}}
 {{- if .Values.fullnameOverride }}
@@ -24,18 +22,18 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 
 {{/*
-Create chart name and version as used by the chart label.
+Chart label.
 */}}
 {{- define "kubenest.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
-Common labels
+Common labels.
 */}}
 {{- define "kubenest.labels" -}}
 helm.sh/chart: {{ include "kubenest.chart" . }}
-{{ include "kubenest.selectorLabels" . }}
+app.kubernetes.io/part-of: kubenest
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -43,19 +41,55 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
-Selector labels
+Backend hostname.
 */}}
-{{- define "kubenest.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "kubenest.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
+{{- define "kubenest.backend.host" -}}
+{{- if .Values.backend.ingress.host }}
+{{- .Values.backend.ingress.host }}
+{{- else }}
+{{- printf "api.%s" .Values.domain }}
+{{- end }}
 {{- end }}
 
-{{/* Registry name */}}
-{{- define "registry.name" -}}
-{{- default "docker-registry" -}}
-{{- end -}}
+{{/*
+Hub hostname.
+*/}}
+{{- define "kubenest.hub.host" -}}
+{{- if .Values.hub.ingress.host }}
+{{- .Values.hub.ingress.host }}
+{{- else }}
+{{- printf "hub.%s" .Values.domain }}
+{{- end }}
+{{- end }}
 
-{{/* Registry fullname */}}
-{{- define "registry.fullname" -}}
-{{- printf "%s-%s" .Release.Name "docker-registry" | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
+{{/*
+UI hostname.
+*/}}
+{{- define "kubenest.ui.host" -}}
+{{- if .Values.ui.ingress.host }}
+{{- .Values.ui.ingress.host }}
+{{- else }}
+{{- printf "app.%s" .Values.domain }}
+{{- end }}
+{{- end }}
+
+{{/*
+PostgreSQL host.
+*/}}
+{{- define "kubenest.postgresql.host" -}}
+{{- printf "%s-postgresql" .Release.Name }}
+{{- end }}
+
+{{/*
+Redis host.
+*/}}
+{{- define "kubenest.redis.host" -}}
+{{- printf "%s-redis-master" .Release.Name }}
+{{- end }}
+
+{{/*
+Database URL.
+*/}}
+{{- define "kubenest.database.url" -}}
+{{- printf "postgresql+asyncpg://%s:%s@%s:5432/%s" .Values.postgresql.auth.username .Values.postgresql.auth.password (include "kubenest.postgresql.host" .) .Values.postgresql.auth.database }}
+{{- end }}
