@@ -1,6 +1,11 @@
 # -- Domain for ingress resources (e.g. kubenest.example.com)
 domain: "kubenest.example.com"
 
+# -- Image pull secrets for private registries (e.g. ghcr.io)
+# Create with: kubectl create secret docker-registry ghcr-creds -n kubenest-system --docker-server=ghcr.io --docker-username=<user> --docker-password=<pat>
+imagePullSecrets: []
+# - name: ghcr-creds
+
 # -- Shared JWT secret for backend <-> hub <-> operator auth
 # Generate with: openssl rand -hex 32
 jwtSecret: ""
