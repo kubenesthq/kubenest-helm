@@ -33,6 +33,10 @@ spec:
               value: "0.0.0.0"
             - name: PORT
               value: "3000"
+            - name: NEXT_PUBLIC_API_URL
+              value: "http://{{ .Release.Name }}-backend:8000"
+            - name: NEXT_PUBLIC_SSE_URL
+              value: "http://{{ .Release.Name }}-backend:8000/api/v1/stream"
           readinessProbe:
             httpGet:
               path: /

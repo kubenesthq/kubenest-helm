@@ -21,6 +21,13 @@ spec:
     - host: {{ include "kubenest.ui.host" . }}
       http:
         paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-backend
+                port:
+                  number: 8000
           - path: /
             pathType: Prefix
             backend:
