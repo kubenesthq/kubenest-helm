@@ -80,13 +80,20 @@ ui:
     host: ""
     annotations: {}
 
-# --- Operator ---
+# --- Operator (optional subchart — disable if operator already installed separately) ---
 operator:
   enabled: true
+
+# -- Operator subchart values (passed to kubenest-operator-2 via alias)
+operator-chart:
   image:
     repository: ghcr.io/kubenesthq/operatorv2
     tag: "latest"
     pullPolicy: Always
+  serviceAccount:
+    create: true
+  rbac:
+    create: true
   resources:
     requests:
       cpu: 100m
@@ -94,7 +101,6 @@ operator:
     limits:
       cpu: 500m
       memory: 512Mi
-  # -- Bootstrap components (set false since prep script installs these)
   bootstrap:
     argocd:
       enabled: true
@@ -104,11 +110,6 @@ operator:
       enabled: false
     vault:
       enabled: false
-  # -- GitOps repo for operator manifests
-  gitops:
-    repoURL: ""
-    branch: "main"
-    token: ""
 
 # --- PostgreSQL (Bitnami) ---
 postgresql:
