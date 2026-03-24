@@ -83,7 +83,7 @@ spec:
             - name: REDIS_QUEUE_HOST
               value: {{ include "kubenest.redis.host" . | quote }}
             - name: ENVIRONMENT
-              value: "production"
+              value: "staging"
           readinessProbe:
             httpGet:
               path: /api/v1/ready
