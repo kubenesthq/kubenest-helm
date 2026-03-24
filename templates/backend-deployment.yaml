@@ -17,6 +17,7 @@ spec:
         app.kubernetes.io/component: backend
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
+      serviceAccountName: {{ .Release.Name }}-backend
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -88,6 +89,10 @@ spec:
               value: {{ .Values.backend.admin.email | quote }}
             - name: ADMIN_PASSWORD
               value: {{ .Values.backend.admin.password | quote }}
+            - name: KUBENEST_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           readinessProbe:
             httpGet:
               path: /api/v1/ready
