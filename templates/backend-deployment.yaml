@@ -74,6 +74,8 @@ spec:
                   key: jwt-secret
             - name: HUB_URL
               value: "ws://{{ .Release.Name }}-hub:8001"
+            - name: HUB_EXTERNAL_URL
+              value: "wss://hub.{{ .Values.domain }}"
             - name: HUB_AUTH_TOKEN
               valueFrom:
                 secretKeyRef:
