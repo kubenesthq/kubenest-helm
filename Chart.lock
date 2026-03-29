@@ -5,8 +5,5 @@ dependencies:
 - name: redis
   repository: https://charts.bitnami.com/bitnami
   version: 25.3.8
-- name: kubenest-operator-2
-  repository: file://../op3/charts/kubenest-operator
-  version: 2.0.0
-digest: sha256:21c5ffa6cee1a8bcf66e0cd1cd4c651950a72dddbe076a456065ef519e0e7cc4
-generated: "2026-03-24T09:47:48.474644+05:30"
+digest: sha256:c8a4d1d2ebd69ad96e75c27251e3059eae68bc3fdb7de534937e07b7e7849171
+generated: "2026-03-29T08:32:13.537154+05:30"
