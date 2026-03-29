@@ -89,6 +89,20 @@ spec:
               value: {{ .Values.backend.admin.email | quote }}
             - name: ADMIN_PASSWORD
               value: {{ .Values.backend.admin.password | quote }}
+            {{- if .Values.encryptionKey }}
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: encryption-key
+            {{- end }}
+            {{- if .Values.provisioningCallbackSecret }}
+            - name: PROVISIONING_CALLBACK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: provisioning-callback-secret
+            {{- end }}
             - name: KUBENEST_NAMESPACE
               valueFrom:
                 fieldRef:

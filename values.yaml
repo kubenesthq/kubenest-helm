@@ -10,6 +10,14 @@ imagePullSecrets: []
 # Generate with: openssl rand -hex 32
 jwtSecret: ""
 
+# -- Fernet key for encrypting cloud credentials at rest
+# Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+encryptionKey: ""
+
+# -- Shared secret for provisioning job callbacks (K8s Job -> backend)
+# Generate with: openssl rand -hex 32
+provisioningCallbackSecret: ""
+
 # -- Namespace for kubenest (usually set via helm install -n)
 # namespace: kubenest-system
 
