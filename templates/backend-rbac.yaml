@@ -21,6 +21,16 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [create]
+  # Provisioning: launch K8s Jobs and read pod logs
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [create, get, list, watch, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
