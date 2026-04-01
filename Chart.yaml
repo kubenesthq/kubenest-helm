@@ -2,8 +2,8 @@ apiVersion: v2
 name: kubenest
 description: Deploy the full KubeNest stack — backend, hub, UI, operator, postgres, redis
 type: application
-version: 2.0.0
-appVersion: "2.0.0"
+version: 2.1.0
+appVersion: "2.1.0"
 
 maintainers:
   - name: Kubenest Team
@@ -19,4 +19,10 @@ dependencies:
     version: "25.3.8"
     repository: https://charts.bitnami.com/bitnami
     condition: redis.enabled
+
+  - name: kubenest-operator-2
+    version: "2.0.0"
+    repository: "oci://ghcr.io/kubenesthq"
+    condition: operator.enabled
+    alias: operator-chart
 
