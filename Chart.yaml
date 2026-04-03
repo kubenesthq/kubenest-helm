@@ -22,7 +22,7 @@ dependencies:
 
   - name: kubenest-operator-2
     version: "2.1.0"
-    repository: "oci://ghcr.io/kubenesthq"
+    repository: "oci://ghcr.io/kubenesthq/charts"
     condition: operator.enabled
     alias: operator-chart
 

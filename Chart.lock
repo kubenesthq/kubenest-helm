@@ -6,7 +6,7 @@ dependencies:
   repository: https://charts.bitnami.com/bitnami
   version: 25.3.8
 - name: kubenest-operator-2
-  repository: oci://ghcr.io/kubenesthq
-  version: 2.0.0
-digest: sha256:15b33f12b964823d510662b063329c40e74debb4ce8d1a997b5a5796908cfc5c
-generated: "2026-04-01T09:11:10.584385+05:30"
+  repository: oci://ghcr.io/kubenesthq/charts
+  version: 2.1.0
+digest: sha256:c4adff6738b9dbdce0f6350dba7bb3307e089afc8adddac12f17df7d6c8df2a1
+generated: "2026-04-03T13:08:21.086675+05:30"
