@@ -127,12 +127,17 @@ operator-chart:
         username: kubenest
         password: ""  # Set via --set operator-chart.gitea.gitea.admin.password=<value>
       config:
+        database:
+          DB_TYPE: sqlite3
         repository:
           DEFAULT_BRANCH: main
-    service:
-      http:
-        type: ClusterIP
-        port: 3000
+    # Disable Gitea's own PostgreSQL and Redis subcharts (use SQLite + built-in cache)
+    postgresql:
+      enabled: false
+    postgresql-ha:
+      enabled: false
+    redis-cluster:
+      enabled: false
     persistence:
       enabled: true
       size: 5Gi
