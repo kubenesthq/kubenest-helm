@@ -116,8 +116,26 @@ operator-chart:
       enabled: false
     ingressNginx:
       enabled: false
+    gitea:
+      enabled: true
     vault:
       enabled: false
+  # Gitea subchart values (internal Git server for GitOps)
+  gitea:
+    gitea:
+      admin:
+        username: kubenest
+        password: ""  # Set via --set operator-chart.gitea.gitea.admin.password=<value>
+      config:
+        repository:
+          DEFAULT_BRANCH: main
+    service:
+      http:
+        type: ClusterIP
+        port: 3000
+    persistence:
+      enabled: true
+      size: 5Gi
 
 # --- PostgreSQL (Bitnami) ---
 postgresql:
