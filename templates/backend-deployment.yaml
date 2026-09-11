@@ -24,7 +24,7 @@ spec:
       {{- end }}
       initContainers:
         - name: migrate
-          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          image: "{{ include "kubenest.image" .Values.backend.image }}"
           imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
           command: ["alembic", "upgrade", "head"]
           env:
@@ -48,7 +48,7 @@ spec:
                   key: jwt-secret
       containers:
         - name: backend
-          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          image: "{{ include "kubenest.image" .Values.backend.image }}"
           imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
           ports:
             - name: http

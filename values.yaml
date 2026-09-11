@@ -25,8 +25,32 @@ provisioningCallbackSecret: ""
 backend:
   image:
     repository: ghcr.io/kubenesthq/kubenest-backend
-    tag: "latest"
-    pullPolicy: Always
+    # PINNED, NOT FLOATING. This chart used to ship tag "latest" with
+    # pullPolicy: Always, which meant the control-plane binary was re-resolved
+    # on EVERY POD START: a node reboot silently changed the control plane on
+    # an installation nobody touched, and no field in the chart could say which
+    # build was running. See kn-control-plane-chart-floats-latest-tkof.
+    #
+    # tag is what a human reads; digest is what Kubernetes resolves, and digest
+    # WINS (templates/_helpers.tpl "kubenest.image"). THEY MOVE TOGETHER — a tag
+    # that disagrees with its digest is a comment that lies. Both were verified
+    # against ghcr on 2026-09-11: :5dd7b9b and :latest resolved to the same
+    # digest below.
+    #
+    # WHAT THIS BUILD IS, and this is the point of pinning rather than a nicety:
+    # org.opencontainers.image.revision on this image is
+    # 5dd7b9bfca4184f22e73b73e6f9351c76a3f5bc2, which CONTAINS ALL THREE
+    # credential-boundary commits — b370dda (clear the stored bearer on the
+    # ownership handover), a66c441 (clear on the ownership STATE rather than
+    # only on the transition), 5dd7b9b (delete the orphaned ArgoCD cluster
+    # Secret). So "is b370dda in the backend this install runs" is now a
+    # question with an answer, and the answer is yes for this pin.
+    tag: "5dd7b9b"
+    digest: "sha256:25d9d31e7c8af8736040a0a52511a1895b28f30d6ecd76624d3ce616eef82416"
+    # IfNotPresent, coherent with a digest. Always + a digest is merely
+    # wasteful; Always + a mutable tag was the defect. This matches what the
+    # provisioner does after kn-provisioner-untraceable-pin-m1b2.
+    pullPolicy: IfNotPresent
   replicas: 1
   resources:
     requests:
@@ -49,8 +73,14 @@ backend:
 hub:
   image:
     repository: ghcr.io/kubenesthq/kubenest-hub
-    tag: "latest"
-    pullPolicy: Always
+    # Same defect, same fix. :094b95e and :latest resolved to this digest on
+    # 2026-09-11. Its org.opencontainers.image.revision is
+    # 094b95e3b3ab347a54fd54309eea5144653d5f89 — the hub only recently learned
+    # to stamp that (kn-xl9u); before it did, a hub image could be pinned but
+    # not identified.
+    tag: "094b95e"
+    digest: "sha256:aa3deaeca21dda4542df1116b0bb873f05eaf4796b4d3a8583a2d0c4caf0fac8"
+    pullPolicy: IfNotPresent
   replicas: 1
   resources:
     requests:
@@ -72,8 +102,19 @@ hub:
 ui:
   image:
     repository: ghcr.io/kubenesthq/kubenest-ui
-    tag: "latest"
-    pullPolicy: Always
+    # Same defect, same fix. :5b72b22 and :latest resolved to this digest on
+    # 2026-09-11.
+    #
+    # STATED LIMIT: this image carries NO org.opencontainers.image.revision, so
+    # the digest pins it EXACTLY but nothing says which commit built it. A
+    # digest without provenance is still strictly better than a mutable tag —
+    # two installs of this chart now get the same bytes — but "which UI source
+    # is this" remains unanswerable for this component. That is the kn-xl9u
+    # shape, unfixed here; the UI build needs the same revision label the hub
+    # just gained.
+    tag: "5b72b22"
+    digest: "sha256:2c0e0838dd0f8e8c43557c708f4cce27f927482334cf950d6795e912a3e11752"
+    pullPolicy: IfNotPresent
   replicas: 1
   resources:
     requests:

@@ -93,3 +93,32 @@ Database URL.
 {{- define "kubenest.database.url" -}}
 {{- printf "postgresql+asyncpg://%s:%s@%s:5432/%s" .Values.postgresql.auth.username .Values.postgresql.auth.password (include "kubenest.postgresql.host" .) .Values.postgresql.auth.database }}
 {{- end }}
+
+{{/*
+Resolve a component image reference, preferring an immutable digest.
+
+WHY A DIGEST PATH EXISTS AT ALL. Until this was added the chart could render
+only `repository:tag`, so "which build is this control plane running" was
+unanswerable BY CONSTRUCTION rather than by omission — there was no field in
+which the answer could be written, whatever anyone set. That is a different
+defect from a bad default, and replacing `latest` with a version tag would not
+have fixed it: tags are mutable, and this project has been bitten by that three
+times (the provisioner's mutable operator tag, the hub image carrying no source
+revision, and this chart).
+
+Digest WINS over tag when both are set. Keep both anyway: the tag is what a
+human reads, the digest is what Kubernetes resolves. They must move together —
+a tag that disagrees with its digest is a comment that lies.
+
+Mirrors kubenest-operator.image in the kubenest-operator-2 chart, deliberately,
+so the two charts answer the same question the same way.
+
+Usage: {{ include "kubenest.image" .Values.backend.image }}
+*/}}
+{{- define "kubenest.image" -}}
+{{- if .digest -}}
+{{- printf "%s@%s" .repository .digest -}}
+{{- else -}}
+{{- printf "%s:%s" .repository .tag -}}
+{{- end -}}
+{{- end }}

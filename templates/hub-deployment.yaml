@@ -23,7 +23,7 @@ spec:
       {{- end }}
       containers:
         - name: hub
-          image: "{{ .Values.hub.image.repository }}:{{ .Values.hub.image.tag }}"
+          image: "{{ include "kubenest.image" .Values.hub.image }}"
           imagePullPolicy: {{ .Values.hub.image.pullPolicy }}
           ports:
             - name: ws
