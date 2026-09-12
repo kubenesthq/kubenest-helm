@@ -25,3 +25,14 @@ jobs:
       # chart: helm would fail for an unrelated reason, which is a gate refusing
       # for a reason it does not own.
       - run: ./scripts/verify-chart-archive.sh kubenest --test-refusal
+      # kn-tkof / kn-boiz. The committed kubenest-*.tgz are the only 2.x
+      # artifacts that exist and are what a released-artifact install takes, and
+      # NOTHING ELSE IN THIS REPOSITORY CAN SEE THEM: the gate above packages the
+      # chart fresh, and the backend floor check reads values.yaml — both are
+      # SOURCE. When the artifact and the source diverged, every control stayed
+      # green. Regenerating them was a state; this is the control.
+      #
+      # --test-refusal builds a drifted fixture and requires the comparison to
+      # reject it, so BOTH arms run on every push rather than only the one the
+      # repository happens to be in.
+      - run: ./scripts/verify-committed-tarballs.sh kubenest --test-refusal
