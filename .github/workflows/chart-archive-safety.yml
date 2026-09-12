@@ -1,0 +1,17 @@
+name: Chart archive safety
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  reject-git-directory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      # The chart is the kubenest/ SUBDIRECTORY, not the repository root. Aiming
+      # this at "." would point the .git gate at something that is no longer a
+      # chart: helm would fail for an unrelated reason, which is a gate refusing
+      # for a reason it does not own.
+      - run: ./scripts/verify-chart-archive.sh kubenest --test-refusal

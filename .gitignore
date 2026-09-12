@@ -1,5 +1,5 @@
 # Downloaded chart archives
-charts/*.tgz
+kubenest/charts/*.tgz
 
 # Temporary files
 *.tmp

@@ -16,15 +16,15 @@ Umbrella Helm chart for deploying the full KubeNest stack to a Kubernetes cluste
 ## Chart Structure
 
 ```
-Chart.yaml              - Dependencies: bitnami/postgresql, bitnami/redis
-values.yaml             - All configurable values
-templates/
+kubenest/Chart.yaml     - Dependencies: bitnami/postgresql, bitnami/redis
+kubenest/values.yaml    - All configurable values
+kubenest/templates/
   backend-deployment.yaml, backend-service.yaml, backend-ingress.yaml
   hub-deployment.yaml, hub-service.yaml, hub-ingress.yaml
   ui-deployment.yaml, ui-service.yaml, ui-ingress.yaml
   operator-deployment.yaml, operator-rbac.yaml
   secret.yaml           - JWT secret shared across backend/hub/operator
-crds/                   - Operator CRDs (Workload, Project, Addon, Stack, etc.)
+kubenest/crds/          - Operator CRDs (Workload, Project, Addon, Stack, etc.)
 scripts/
   prep-cluster.sh       - Installs ingress-nginx + cert-manager prerequisites
 ```
@@ -43,7 +43,7 @@ kubectl create secret docker-registry ghcr-creds \
   --docker-password=<pat>
 
 # 3. Install
-helm install kubenest . -n kubenest-system --create-namespace \
+helm install kubenest ./kubenest -n kubenest-system --create-namespace \
   --set jwtSecret=$(openssl rand -hex 32) \
   --set domain=kubenest.example.com \
   --set postgresql.auth.password=$(openssl rand -hex 16) \
@@ -78,4 +78,4 @@ PostgreSQL + Redis → Backend init container (alembic migrations) → Backend �
 
 - The operator also has a **standalone chart** in `op3/charts/kubenest-operator/` for deploying to remote target clusters separately. This umbrella chart bakes the operator in as a template for the single-cluster model.
 - GHCR images are private — `imagePullSecrets` is required.
-- Bitnami subcharts rotate image tags aggressively — if PostgreSQL/Redis fail with "not found", bump the subchart versions in `Chart.yaml` and run `helm dependency update`.
+- Bitnami subcharts rotate image tags aggressively — if PostgreSQL/Redis fail with "not found", bump the subchart versions in `kubenest/Chart.yaml` and run `helm dependency update`.

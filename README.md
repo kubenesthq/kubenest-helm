@@ -61,7 +61,7 @@ registry:
 3. Download the chart dependencies:
 
 ```bash
-helm dependency build
+helm dependency build kubenest
 ```
 
 4. Install the chart:
@@ -128,7 +128,7 @@ The chart has the following dependencies that are conditionally included based o
 ## Testing
 
 ```bash
-helm template . -f sample-values.yaml --output-dir ./output --include-crds
+helm template kubenest -f kubenest/sample-values.yaml --output-dir ./output --include-crds
 ```
 
 ## Packaging and Publishing to GitHub Packages
@@ -142,7 +142,7 @@ echo $GITHUB_TOKEN | helm registry login ghcr.io -u USERNAME --password-stdin
 2. Package the chart:
 
 ```bash
-helm package .
+helm package kubenest
 ```
 
 3. Push the chart to GitHub Packages:
