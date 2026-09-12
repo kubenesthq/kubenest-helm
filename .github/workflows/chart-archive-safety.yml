@@ -10,6 +10,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
+      # A fresh runner has NO helm repo definitions, and `helm dependency build`
+      # needs one for every https repository named in Chart.yaml — it fails with
+      # "no repository definition for https://charts.bitnami.com/bitnami". That
+      # is a gate refusing for a reason it does not own, which is the exact shape
+      # kn-ubrk was filed about: red reads as diligence and proves nothing. The
+      # OCI dependency needs no such entry.
+      #
+      # It belongs here rather than in the script: a verification script should
+      # not mutate the caller's helm configuration as a side effect.
+      - run: helm repo add bitnami https://charts.bitnami.com/bitnami
       # The chart is the kubenest/ SUBDIRECTORY, not the repository root. Aiming
       # this at "." would point the .git gate at something that is no longer a
       # chart: helm would fail for an unrelated reason, which is a gate refusing
