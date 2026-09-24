@@ -30,6 +30,13 @@ encryptionKey: ""
 # Generate with: openssl rand -hex 32
 provisioningCallbackSecret: ""
 
+# -- Set by `kubenest platform install --control-plane` to a hash of the chart
+# archive and these values. It is stamped on the backend, hub and UI pod
+# templates, so the installer can tell a Deployment running THIS apply from one
+# still running the previous one. A changed value therefore rolls all three.
+# Leave it empty when installing by hand.
+installRevision: ""
+
 # --- Gateway API exposure ---
 # The platform bundle already runs Traefik with the Gateway API CRDs and a
 # cert-manager ClusterIssuer that signs from the platform CA. This chart adds

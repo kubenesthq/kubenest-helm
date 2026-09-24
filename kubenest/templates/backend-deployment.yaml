@@ -16,6 +16,10 @@ spec:
       labels:
         app.kubernetes.io/component: backend
         app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- with .Values.installRevision }}
+      annotations:
+        kubenest.io/install-revision: {{ . | quote }}
+      {{- end }}
     spec:
       serviceAccountName: {{ .Release.Name }}-backend
       {{- with .Values.imagePullSecrets }}
