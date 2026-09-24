@@ -67,19 +67,20 @@ backend:
     # tag is what a human reads; digest is what Kubernetes resolves, and digest
     # WINS (templates/_helpers.tpl "kubenest.image"). THEY MOVE TOGETHER — a tag
     # that disagrees with its digest is a comment that lies. Both were verified
-    # against ghcr on 2026-09-24: the build-image run for 176b972 pushed
-    # :176b972 and :latest as the digest below.
+    # against ghcr on 2026-09-24: the build-image run for 132b7ea pushed
+    # :132b7ea and :latest as the digest below.
     #
     # WHAT THIS BUILD IS: org.opencontainers.image.revision on this image is
-    # the full sha of kubenest-backend 176b972. It carries the kn-cjqw
+    # the full sha of kubenest-backend 132b7ea. It carries the kn-cjqw
     # Option A cutover (efd4540: no control-plane Argo CD registration path,
     # no stored cluster bearer, no self-seeded host cluster, so the cluster
-    # that hosts this chart registers through the API under D17) and 176b972,
-    # which deletes the Argo CD Application watcher that cutover left behind.
-    # An image older than efd4540 would re-create the two-writer identity
-    # Secret collision.
-    tag: "176b972"
-    digest: "sha256:ef99390ae91cea9ace319fe6365e4f24391728c9b5ac719c762bd45b2540cea5"
+    # that hosts this chart registers through the API under D17), 176b972
+    # (the Argo CD Application watcher that cutover left behind is deleted),
+    # and 132b7ea, whose catalog serves bundle 1.1. A control plane that
+    # cannot serve 1.1 cannot upgrade a cluster to it. An image older than
+    # efd4540 would re-create the two-writer identity Secret collision.
+    tag: "132b7ea"
+    digest: "sha256:86ec31d412d52d68f00688c664cea7e279bfb64ab70dd967c42d162d99e498c0"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
