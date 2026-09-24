@@ -1,173 +1,91 @@
-# Kubenest Helm Chart
+# KubeNest control-plane Helm chart
 
-This Helm chart packages multiple Kubernetes components into a single umbrella chart. It includes:
+One chart, one cluster. `kubenest/kubenest` installs the KubeNest **control
+plane** into a single Kubernetes cluster:
 
-- Ingress Controller (optional)
-- Cert Manager (optional)
-- Container Registry (optional)
-- Kubenest Operator (mandatory)
-- Buildwatch (mandatory)
+| Component | What it is |
+|-----------|------------|
+| backend | FastAPI control-plane API (Deployment + Service + ServiceAccount/Role) |
+| hub | Operator WebSocket relay (Deployment + Service) |
+| ui | Next.js admin UI (Deployment + Service) |
+| postgresql | Bitnami PostgreSQL subchart, image pinned by digest |
+| redis | Bitnami Redis subchart (standalone), image pinned by digest |
+| Gateway + Certificate + HTTPRoutes | Gateway API exposure for `app.`, `api.` and `hub.<domain>` |
 
-## Prerequisites
+The **operator is not installed by this chart**. The platform bundle is the only
+operator source: this chart installs into a cluster where the bundle already runs
+the operator, and that operator creates its workload Argo CD Applications on its
+own cluster, against its own Argo CD.
 
-- Kubernetes cluster 1.16+
-- Helm 3.0+
+## What the cluster must already have
 
-## Installation
+Installed by the KubeNest platform bundle (see `kubenest-contracts`):
 
-1. Add the required Helm repositories:
+- Traefik with the Gateway API CRDs, exposing a GatewayClass named `traefik`.
+  The chart's own Gateway listens on port **8443**, which is the bundle
+  Traefik's `websecure` entrypoint port — not 443.
+- cert-manager with a ClusterIssuer named `kubenest-ca`, which signs the
+  control-plane certificate from the platform CA.
+- A default StorageClass for the PostgreSQL and Redis volumes.
+- Kubernetes 1.29+ and Helm 3.8+.
 
-```bash
-helm repo add bitnami https://charts.bitnami.com/bitnami
-helm repo add twun https://helm.twun.io
-helm repo add kubenest oci://ghcr.io/kubenesthq/charts
-helm repo update
-```
+No network access is needed to install from this checkout: the PostgreSQL and
+Redis chart archives are vendored under `kubenest/charts/`.
 
-2. Create a values file with your configuration:
+## Which command installs it
 
-```yaml
-# Shared configuration
-tld: "your-domain.com"
-email: "your-email@example.com"
+`kubenest platform install --control-plane` installs the platform bundle *and*
+this chart into the first cluster, then registers that cluster through the same
+API path as every other cluster and leaves the CLI logged in. Every further
+cluster is added with `kubenest platform install`, using the values the CLI
+already holds.
 
-# Mandatory components
-shapeblock-operator:
-  image:
-    tag: "05-04-2025.09.57"
-  apiUrl: "https://your-api-url"
-  credentials:
-    apiKey: "your-cluster-key"
-    licenseKey: "your-license-key"
-    licenseEmail: "your-email@example.com"
-  imported: true
+## Required values
 
-buildwatch:
-  config:
-    backendURL: "https://your-api-url"
-    clusterKey: "your-cluster-key"
+The installer generates these; the chart refuses to render without them.
 
-# Optional components
-ingress:
-  enabled: true
+| Value | Notes |
+|-------|-------|
+| `domain` | Hostnames become `app.<domain>`, `api.<domain>`, `hub.<domain>` |
+| `jwtSecret` | `openssl rand -hex 32`; shared by backend and hub |
+| `encryptionKey` | Fernet key for credentials stored at rest |
+| `postgresql.auth.password` | Database password |
+| `backend.admin.email` | Initial admin account, created by the backend on first boot |
+| `backend.admin.password` | Created admin's password; no default |
 
-certManager:
-  enabled: true
+Optional, with defaults: `gateway.enabled` (`true`), `gateway.className`
+(`traefik`), `gateway.issuer` (`kubenest-ca`), `gateway.port` (`8443`),
+`backend.crudAdmin.enabled` (`false`), `hub.publicURL` (`wss://hub.<domain>`),
+`provisioningCallbackSecret`, `imagePullSecrets` and the per-component image,
+replica and resource settings.
 
-registry:
-  enabled: true
-```
-
-3. Download the chart dependencies:
-
-```bash
-helm dependency build kubenest
-```
-
-4. Install the chart:
+## Rendering locally
 
 ```bash
-# Option 1: Using values file
-helm install kubenest oci://ghcr.io/kubenesthq/charts/kubenest -f values.yaml -n your-namespace --include-crds
-
-# Option 2: Using CLI values
-helm install kubenest oci://ghcr.io/kubenesthq/charts/kubenest \
-  --set shapeblock-operator.image.tag=05-04-2025.10.32 \
-  --set shapeblock-operator.credentials.apiKey=your-cluster-key \
-  --set buildwatch.config.clusterKey=your-cluster-key \
-  -n your-namespace \
-  --include-crds
-
-# Option 3: Using both values file and CLI overrides
-helm install kubenest ./kubenest \
-  -f values.yaml \
-  --set shapeblock-operator.credentials.apiKey=your-cluster-key \
-  --set buildwatch.config.clusterKey=your-cluster-key \
-  -n your-namespace \
-  --include-crds
+helm template kubenest-cp ./kubenest -n kubenest-system -f ./kubenest/sample-values.yaml
 ```
 
-## Configuration
+`kubenest/sample-values.yaml` is a minimal example of what the installer writes.
 
-The following table lists the configurable parameters of the chart and their default values.
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `tld` | Top-level domain for ingress hosts | `kubenestapp.com` |
-| `email` | Email for cert-manager | `admin@example.com` |
-| `shapeblock-operator.image.tag` | Version of the operator to deploy | `"05-04-2025.09.57"` |
-| `shapeblock-operator.apiUrl` | API URL for the operator | `""` |
-| `shapeblock-operator.credentials.apiKey` | API key for the operator | `""` |
-| `shapeblock-operator.credentials.licenseKey` | License key for the operator | `""` |
-| `shapeblock-operator.credentials.licenseEmail` | License email for the operator | `""` |
-| `buildwatch.config.backendURL` | Backend URL for Buildwatch | `""` |
-| `buildwatch.config.clusterKey` | Cluster key for Buildwatch | `""` |
-| `ingress.enabled` | Enable Ingress Controller | `false` |
-| `certManager.enabled` | Enable Cert Manager | `false` |
-| `registry.enabled` | Enable Container Registry | `false` |
-
-## Dependencies
-
-The chart has the following dependencies that are conditionally included based on the values:
-
-- nginx-ingress-controller (from bitnami) - enabled when `ingress.enabled` is true
-- cert-manager (from bitnami) - enabled when `certManager.enabled` is true
-- docker-registry (from twun) - enabled when `registry.enabled` is true
-- shapeblock-operator (from kubenest) - always included (mandatory)
-- buildwatch (from kubenest) - always included (mandatory)
-
-## Notes
-
-- The operator and buildwatch components are mandatory and will always be installed
-- Other components can be enabled/disabled as needed
-- Make sure to provide all required credentials and URLs in the values file
-- The chart uses Helm's native dependency management for conditional installation of components
-- All components will be installed in the namespace specified during helm install (via `-n` flag)
-- When using `helm template`, include the `--include-crds` flag to generate CRD manifests
-
-## Testing
-
-```bash
-helm template kubenest -f kubenest/sample-values.yaml --output-dir ./output --include-crds
-```
-
-## Packaging and Publishing to GitHub Packages
-
-1. Login to GitHub Container Registry:
-
-```bash
-echo $GITHUB_TOKEN | helm registry login ghcr.io -u USERNAME --password-stdin
-```
-
-2. Package the chart:
+## Packaging and publishing
 
 ```bash
 helm package kubenest
+helm push kubenest-3.0.0.tgz oci://ghcr.io/kubenesthq/charts
 ```
 
-3. Push the chart to GitHub Packages:
+Bump `version` in `Chart.yaml` before pushing; the version is what the platform
+bundle and the CLI pin.
+
+## Dependency lock
+
+`Chart.lock` pins the two Bitnami subcharts by version and digest. It was
+regenerated with:
 
 ```bash
-# For the first version
-helm push kubenest-0.1.0.tgz oci://ghcr.io/kubenesthq/charts
-
-# For subsequent versions, increment the version in Chart.yaml and repeat
-helm push kubenest-0.1.1.tgz oci://ghcr.io/kubenesthq/charts
+helm dependency update kubenest
 ```
 
-4. To use the published chart:
-
-```bash
-# Option 1: Using repository (recommended for frequent updates)
-# Add the repository
-helm repo add kubenesthq oci://ghcr.io/kubenesthq/charts
-
-# Update the repository
-helm repo update
-
-# Install the chart
-helm install kubenest kubenesthq/kubenest -f values.yaml -n your-namespace --include-crds
-
-# Option 2: Direct OCI installation (useful for one-time installations)
-helm install kubenest oci://ghcr.io/kubenesthq/charts/kubenest -f values.yaml -n your-namespace --include-crds
-```
+Regenerating it needs the Bitnami repository (`helm repo add bitnami
+https://charts.bitnami.com/bitnami`) and downloads the same archives that are
+vendored in `kubenest/charts/`.

@@ -41,36 +41,24 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
-Backend hostname.
+Backend hostname, published by the chart's Gateway.
 */}}
 {{- define "kubenest.backend.host" -}}
-{{- if .Values.backend.ingress.host }}
-{{- .Values.backend.ingress.host }}
-{{- else }}
 {{- printf "api.%s" .Values.domain }}
 {{- end }}
-{{- end }}
 
 {{/*
-Hub hostname.
+Hub hostname, published by the chart's Gateway.
 */}}
 {{- define "kubenest.hub.host" -}}
-{{- if .Values.hub.ingress.host }}
-{{- .Values.hub.ingress.host }}
-{{- else }}
 {{- printf "hub.%s" .Values.domain }}
-{{- end }}
 {{- end }}
 
 {{/*
-UI hostname.
+UI hostname, published by the chart's Gateway.
 */}}
 {{- define "kubenest.ui.host" -}}
-{{- if .Values.ui.ingress.host }}
-{{- .Values.ui.ingress.host }}
-{{- else }}
 {{- printf "app.%s" .Values.domain }}
-{{- end }}
 {{- end }}
 
 {{/*
@@ -109,9 +97,6 @@ revision, and this chart).
 Digest WINS over tag when both are set. Keep both anyway: the tag is what a
 human reads, the digest is what Kubernetes resolves. They must move together —
 a tag that disagrees with its digest is a comment that lies.
-
-Mirrors kubenest-operator.image in the kubenest-operator-2 chart, deliberately,
-so the two charts answer the same question the same way.
 
 Usage: {{ include "kubenest.image" .Values.backend.image }}
 */}}

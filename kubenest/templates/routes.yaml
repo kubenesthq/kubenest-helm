@@ -1,0 +1,79 @@
+{{- if .Values.gateway.enabled }}
+# HTTPRoutes attached to the Gateway rendered in gateway.yaml (same name and
+# namespace). One route per hostname, because each listener accepts routes only
+# for its own hostname.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Release.Name }}-app
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  parentRefs:
+    - name: {{ .Release.Name }}
+  hostnames:
+    - {{ include "kubenest.ui.host" . }}
+  rules:
+    # /api must be matched before /, otherwise the UI would swallow every API
+    # call that reaches the app hostname.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: {{ .Release.Name }}-backend
+          port: 8000
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ .Release.Name }}-ui
+          port: 3000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Release.Name }}-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  parentRefs:
+    - name: {{ .Release.Name }}
+  hostnames:
+    - {{ include "kubenest.backend.host" . }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ .Release.Name }}-backend
+          port: 8000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Release.Name }}-hub
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hub
+spec:
+  parentRefs:
+    - name: {{ .Release.Name }}
+  hostnames:
+    - {{ include "kubenest.hub.host" . }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ .Release.Name }}-hub
+          port: 8001
+{{- end }}

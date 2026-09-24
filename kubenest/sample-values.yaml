@@ -1,29 +1,16 @@
-tld: "kubenestapp.com"
-email: "admin@example.com"
+# Example values for a local `helm template`/`helm install` of the control
+# plane. `kubenest platform install --control-plane` generates these itself
+# (random jwtSecret, encryptionKey, admin and database passwords) and hands
+# them to the chart as-is.
+domain: "203.0.113.10.sslip.io"
 
-# Mandatory components
-shapeblock-operator:
-  image:
-    tag: "12-03-2025.23.02"
-  apiUrl: "https://api.kubenest.io"
+jwtSecret: "replace-with-openssl-rand-hex-32"
+encryptionKey: "replace-with-a-fernet-key"
+postgresql:
+  auth:
+    password: "replace-with-a-random-password"
 
-  credentials:
-    apiKey: "14d8f9cf-567e-4a89-9866-e7fcb6b5efed"
-    licenseKey: "ABC123"
-    licenseEmail: "test@example.com"
-  imported: true
-
-buildwatch:
-  config:
-    backendURL: "https://api.kubenest.io"
-    clusterKey: "14d8f9cf-567e-4a89-9866-e7fcb6b5efed"
-
-ingress:
-  enabled: true
-
-certManager:
-  enabled: true
-
-registry:
-  enabled: true
-
+backend:
+  admin:
+    email: "admin@example.com"
+    password: "replace-with-a-random-password"

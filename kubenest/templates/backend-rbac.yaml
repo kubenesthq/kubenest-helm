@@ -14,10 +14,10 @@ metadata:
     {{- include "kubenest.labels" . | nindent 4 }}
     app.kubernetes.io/component: backend
 rules:
-  # Backend manages: kubenest-operator-token (operator JWT rotation),
-  # ArgoCD cluster secrets (cluster-{id[:8]}, self-heal + rotate + delete),
-  # and ad-hoc workload secrets. RBAC can't gate on name prefix, so this
-  # is namespace-wide. Tighten with a NetworkPolicy if needed.
+  # Backend writes Secrets in its own namespace: the ephemeral credential
+  # Secrets its provisioning Jobs read, and the docker-registry pull Secrets it
+  # creates for project namespaces. RBAC can't gate on name prefix, so this is
+  # namespace-wide. Tighten with a NetworkPolicy if needed.
   - apiGroups: [""]
     resources: [secrets]
     verbs: [get, list, create, update, patch, delete]
@@ -31,10 +31,11 @@ rules:
   - apiGroups: [""]
     resources: [pods/log]
     verbs: [get]
-  # ArgoCD: manage Applications for workload deployments
+  # Application watcher: the operator creates the workload Application objects on
+  # this cluster and the backend only reads their status to push it down the hub.
   - apiGroups: [argoproj.io]
     resources: [applications]
-    verbs: [get, list, create, update, patch, delete]
+    verbs: [get, list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

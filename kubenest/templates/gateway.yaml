@@ -1,0 +1,81 @@
+{{- if .Values.gateway.enabled }}
+# A Certificate and a Gateway for the three control-plane hostnames.
+#
+# WHY THIS GATEWAY EXISTS AT ALL. The platform bundle ships its own Gateway
+# (kubenest-gateway) with one certificate for default.gateway.kubenest.internal.
+# That certificate does not carry app./api./hub.<domain>, so an HTTPS client of
+# api.<domain> would fail hostname verification against it. The listeners below
+# terminate with a certificate whose dnsNames are exactly the three hostnames,
+# signed by the bundle's ClusterIssuer, and they all point at one Secret.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Release.Name }}-tls
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  secretName: {{ .Release.Name }}-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: {{ .Values.gateway.issuer }}
+  dnsNames:
+    - {{ include "kubenest.ui.host" . }}
+    - {{ include "kubenest.backend.host" . }}
+    - {{ include "kubenest.hub.host" . }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  gatewayClassName: {{ .Values.gateway.className }}
+  listeners:
+    # 8443 is the bundle Traefik's websecure entrypoint port, not 443: the
+    # bundle maps 8443 to its TLS entrypoint, so a listener on 443 would never
+    # receive traffic.
+    - name: app
+      hostname: {{ include "kubenest.ui.host" . }}
+      port: {{ .Values.gateway.port }}
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: {{ .Release.Name }}-tls
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: api
+      hostname: {{ include "kubenest.backend.host" . }}
+      port: {{ .Values.gateway.port }}
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: {{ .Release.Name }}-tls
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: hub
+      hostname: {{ include "kubenest.hub.host" . }}
+      port: {{ .Values.gateway.port }}
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: {{ .Release.Name }}-tls
+      allowedRoutes:
+        namespaces:
+          from: Same
+{{- end }}

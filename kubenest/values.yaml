@@ -1,4 +1,14 @@
-# -- Domain for ingress resources (e.g. kubenest.example.com)
+# KubeNest control-plane chart values.
+#
+# This chart installs the control plane of one KubeNest installation into a
+# single cluster: the backend API, the operator relay (hub), the UI, PostgreSQL
+# and Redis. It is installed by `kubenest platform install --control-plane` on
+# the first cluster, and by `kubenest platform install` (with the pre-generated
+# values below) on every further cluster that is registered to that control
+# plane.
+
+# -- Domain the three control-plane hostnames hang off: the UI at app.<domain>,
+# the API at api.<domain> and the operator relay at hub.<domain>.
 domain: "kubenest.example.com"
 
 # -- Image pull secrets for private registries (e.g. ghcr.io)
@@ -6,11 +16,11 @@ domain: "kubenest.example.com"
 imagePullSecrets: []
 # - name: ghcr-creds
 
-# -- Shared JWT secret for backend <-> hub <-> operator auth
-# Generate with: openssl rand -hex 32
+# -- REQUIRED. Shared JWT secret for backend <-> hub auth. The chart refuses to
+# render without it. Generate with: openssl rand -hex 32
 jwtSecret: ""
 
-# -- Fernet key for encrypting cloud credentials at rest
+# -- REQUIRED. Fernet key that encrypts stored cloud credentials at rest.
 # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 encryptionKey: ""
 
@@ -18,8 +28,22 @@ encryptionKey: ""
 # Generate with: openssl rand -hex 32
 provisioningCallbackSecret: ""
 
-# -- Namespace for kubenest (usually set via helm install -n)
-# namespace: kubenest-system
+# --- Gateway API exposure ---
+# The platform bundle already runs Traefik with the Gateway API CRDs and a
+# cert-manager ClusterIssuer that signs from the platform CA. This chart adds
+# its OWN Gateway for the three control-plane hostnames, because the bundle's
+# Gateway serves a single certificate for default.gateway.kubenest.internal and
+# a client of api.<domain> would fail hostname verification against it.
+gateway:
+  # -- Render the Gateway, its Certificate and the HTTPRoutes.
+  enabled: true
+  # -- GatewayClass to attach to, served by the bundle's Traefik.
+  className: "traefik"
+  # -- ClusterIssuer that signs the control-plane certificate.
+  issuer: "kubenest-ca"
+  # -- Listener port. 8443 is the bundle Traefik's websecure ENTRYPOINT port,
+  # not 443.
+  port: 8443
 
 # --- Backend (FastAPI) ---
 backend:
@@ -34,19 +58,17 @@ backend:
     # tag is what a human reads; digest is what Kubernetes resolves, and digest
     # WINS (templates/_helpers.tpl "kubenest.image"). THEY MOVE TOGETHER — a tag
     # that disagrees with its digest is a comment that lies. Both were verified
-    # against ghcr on 2026-09-11: :5dd7b9b and :latest resolved to the same
-    # digest below.
+    # against ghcr on 2026-09-24: the build-image run for efd4540 pushed
+    # :efd4540 and :latest as the digest below.
     #
-    # WHAT THIS BUILD IS, and this is the point of pinning rather than a nicety:
-    # org.opencontainers.image.revision on this image is
-    # 5dd7b9bfca4184f22e73b73e6f9351c76a3f5bc2, which CONTAINS ALL THREE
-    # credential-boundary commits — b370dda (clear the stored bearer on the
-    # ownership handover), a66c441 (clear on the ownership STATE rather than
-    # only on the transition), 5dd7b9b (delete the orphaned ArgoCD cluster
-    # Secret). So "is b370dda in the backend this install runs" is now a
-    # question with an answer, and the answer is yes for this pin.
-    tag: "5dd7b9b"
-    digest: "sha256:25d9d31e7c8af8736040a0a52511a1895b28f30d6ecd76624d3ce616eef82416"
+    # WHAT THIS BUILD IS: org.opencontainers.image.revision on this image is
+    # the full sha of kubenest-backend efd4540, the kn-cjqw Option A cutover.
+    # It is the first build with no control-plane Argo CD registration path
+    # and no stored cluster bearer, and it does not self-seed a host cluster,
+    # so the cluster that hosts this chart registers through the API (D17).
+    # An earlier pin would re-create the two-writer identity Secret collision.
+    tag: "efd4540"
+    digest: "sha256:c7f1bebe02ae3618090f628115097c086f62464c219e9f45ea71ebca153cd01b"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
@@ -59,15 +81,16 @@ backend:
     limits:
       cpu: 500m
       memory: 512Mi
-  ingress:
-    enabled: true
-    # -- Override hostname (default: api.<domain>)
-    host: ""
-    annotations: {}
-  # -- Initial admin user
+  # -- Initial admin user, created by the backend on first boot.
   admin:
     email: "admin@kubenest.io"
-    password: "changeme"
+    # -- REQUIRED, no default. The installer generates a random password and
+    # sets it here; the chart refuses to render while this is empty.
+    password: ""
+  # -- CRUD admin API (CRUD_ADMIN_ENABLED). Off by default: the UI is the
+  # intended admin surface, and this API is for scripted cluster setup.
+  crudAdmin:
+    enabled: false
 
 # --- Hub (Go WebSocket relay) ---
 hub:
@@ -89,14 +112,9 @@ hub:
     limits:
       cpu: 200m
       memory: 256Mi
-  ingress:
-    enabled: true
-    # -- Override hostname (default: hub.<domain>)
-    host: ""
-    annotations:
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-      nginx.org/websocket-services: "{{ .Release.Name }}-hub"
+  # -- Public base URL of the hub that the backend hands to clusters; the
+  # backend appends /ws/operator. Empty means wss://hub.<domain>.
+  publicURL: ""
 
 # --- UI (Next.js) ---
 ui:
@@ -123,73 +141,19 @@ ui:
     limits:
       cpu: 200m
       memory: 256Mi
-  ingress:
-    enabled: true
-    # -- Override hostname (default: app.<domain>)
-    host: ""
-    annotations: {}
-
-# --- Operator (optional subchart — disable if operator already installed separately) ---
-operator:
-  enabled: true
-
-# -- Operator subchart values (passed to kubenest-operator-2 via alias)
-operator-chart:
-  image:
-    repository: ghcr.io/kubenesthq/operatorv2
-    tag: "latest"
-    pullPolicy: Always
-  serviceAccount:
-    create: true
-  rbac:
-    create: true
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-  bootstrap:
-    argocd:
-      enabled: true
-    certManager:
-      enabled: false
-    ingressNginx:
-      enabled: false
-    gitea:
-      enabled: true
-    vault:
-      enabled: false
-  # Gitea subchart values (internal Git server for GitOps)
-  gitea:
-    gitea:
-      admin:
-        username: kubenest
-        password: ""  # Set via --set operator-chart.gitea.gitea.admin.password=<value>
-      config:
-        database:
-          DB_TYPE: sqlite3
-        repository:
-          DEFAULT_BRANCH: main
-    # Disable Gitea's own PostgreSQL and Redis subcharts (use SQLite + built-in cache)
-    postgresql:
-      enabled: false
-    postgresql-ha:
-      enabled: false
-    redis-cluster:
-      enabled: false
-    persistence:
-      enabled: true
-      size: 5Gi
 
 # --- PostgreSQL (Bitnami) ---
 postgresql:
   enabled: true
   auth:
     username: kubenest
+    # -- REQUIRED. The installer generates a random password and sets it here.
     password: ""
     database: kubenest
+  image:
+    # -- Pinned to the digest bitnami/postgresql:latest resolved to on
+    # 2026-09-24, so the chart installs the same bytes offline.
+    digest: "sha256:7d77a46bbf200709237318c27dec0eaeae2520e403dd18fdebde2be7a6b04993"
   primary:
     persistence:
       size: 5Gi
@@ -200,6 +164,9 @@ redis:
   architecture: standalone
   auth:
     enabled: false
+  image:
+    # -- Pinned to the digest bitnami/redis:latest resolved to on 2026-09-24.
+    digest: "sha256:ef8442c1ec2e28cef662999f348a4369c22343dc0c86c3bc23041fad22f13ca1"
   master:
     persistence:
       size: 1Gi

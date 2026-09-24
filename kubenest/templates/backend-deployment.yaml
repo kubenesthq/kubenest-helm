@@ -74,8 +74,10 @@ spec:
                   key: jwt-secret
             - name: HUB_URL
               value: "ws://{{ .Release.Name }}-hub:8001"
-            - name: HUB_EXTERNAL_URL
-              value: "wss://hub.{{ .Values.domain }}"
+            # Base URL handed to clusters; the backend appends /ws/operator.
+            # Defaults to the hub hostname the Gateway publishes.
+            - name: HUB_PUBLIC_URL
+              value: {{ .Values.hub.publicURL | default (printf "wss://hub.%s" .Values.domain) | quote }}
             - name: HUB_AUTH_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -90,7 +92,9 @@ spec:
             - name: ADMIN_EMAIL
               value: {{ .Values.backend.admin.email | quote }}
             - name: ADMIN_PASSWORD
-              value: {{ .Values.backend.admin.password | quote }}
+              value: {{ required "backend.admin.password is required" .Values.backend.admin.password | quote }}
+            - name: CRUD_ADMIN_ENABLED
+              value: {{ .Values.backend.crudAdmin.enabled | quote }}
             {{- if .Values.encryptionKey }}
             - name: ENCRYPTION_KEY
               valueFrom:
@@ -109,22 +113,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            {{- if index .Values "operator-chart" "bootstrap" "gitea" "enabled" }}
-            - name: GITEA_URL
-              value: "http://{{ .Release.Name }}-operator-chart-gitea-http.{{ .Release.Namespace }}:3000"
-            - name: GITEA_USER
-              value: {{ index .Values "operator-chart" "gitea" "gitea" "admin" "username" | default "kubenest" | quote }}
-            - name: GITEA_REPO
-              value: "gitops"
-            - name: GIT_REPO_BRANCH
-              value: "main"
-            {{- if index .Values "operator-chart" "gitea" "gitea" "admin" "password" }}
-            - name: GITEA_TOKEN
-              value: {{ index .Values "operator-chart" "gitea" "gitea" "admin" "password" | quote }}
-            - name: GIT_REPO_URL
-              value: "http://{{ .Release.Name }}-operator-chart-gitea-http.{{ .Release.Namespace }}:3000/kubenest/gitops.git"
-            {{- end }}
-            {{- end }}
           readinessProbe:
             httpGet:
               path: /api/v1/ready

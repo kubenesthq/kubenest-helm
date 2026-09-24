@@ -1,21 +1,17 @@
 KubeNest has been deployed!
 
-Components:
-  - Backend:  https://{{ include "kubenest.backend.host" . }}
-  - Hub:      wss://{{ include "kubenest.hub.host" . }}
-  - UI:       https://{{ include "kubenest.ui.host" . }}
-  - Operator: Running in {{ .Release.Namespace }}
+Control plane:
+  - UI:       https://app.{{ .Values.domain }}
+  - API:      https://api.{{ .Values.domain }}
+  - Hub:      wss://hub.{{ .Values.domain }}
+  - Admin:    {{ .Values.backend.admin.email }}
 
 Next steps:
   1. Wait for all pods to be ready:
      kubectl get pods -n {{ .Release.Namespace }} -w
 
-  2. Open the UI and login:
-     https://{{ include "kubenest.ui.host" . }}
-     Email: {{ .Values.backend.admin.email }}
+  2. Sign in to the UI:
+     https://app.{{ .Values.domain }}
 
-  3. Register this cluster as a workload cluster:
-     - Go to Clusters → New Cluster
-     - Copy the install command (operator is already running, just register via API)
-
-  4. Create a project and deploy your first workload!
+  3. Register more clusters with the CLI (already logged in here):
+     kubenest platform install
