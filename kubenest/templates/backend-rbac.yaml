@@ -31,11 +31,6 @@ rules:
   - apiGroups: [""]
     resources: [pods/log]
     verbs: [get]
-  # Application watcher: the operator creates the workload Application objects on
-  # this cluster and the backend only reads their status to push it down the hub.
-  - apiGroups: [argoproj.io]
-    resources: [applications]
-    verbs: [get, list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
