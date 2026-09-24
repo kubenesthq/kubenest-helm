@@ -46,6 +46,14 @@ spec:
                 secretKeyRef:
                   name: {{ .Release.Name }}-secrets
                   key: jwt-secret
+            # The migration chain encrypts at rest (20260910_encrypt_cluster_bearer),
+            # and the backend refuses to derive that key from SECRET_KEY, so a
+            # fresh database cannot migrate without this.
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: encryption-key
       containers:
         - name: backend
           image: "{{ include "kubenest.image" .Values.backend.image }}"
@@ -95,13 +103,11 @@ spec:
               value: {{ required "backend.admin.password is required" .Values.backend.admin.password | quote }}
             - name: CRUD_ADMIN_ENABLED
               value: {{ .Values.backend.crudAdmin.enabled | quote }}
-            {{- if .Values.encryptionKey }}
             - name: ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ .Release.Name }}-secrets
                   key: encryption-key
-            {{- end }}
             {{- if .Values.provisioningCallbackSecret }}
             - name: PROVISIONING_CALLBACK_SECRET
               valueFrom:

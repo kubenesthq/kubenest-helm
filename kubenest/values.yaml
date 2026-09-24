@@ -20,7 +20,9 @@ imagePullSecrets: []
 # render without it. Generate with: openssl rand -hex 32
 jwtSecret: ""
 
-# -- REQUIRED. Fernet key that encrypts stored cloud credentials at rest.
+# -- REQUIRED. Fernet key that encrypts stored secrets at rest. The chart
+# refuses to render without it: the backend cannot even migrate a fresh
+# database without it, and it will not derive it from jwtSecret.
 # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 encryptionKey: ""
 
