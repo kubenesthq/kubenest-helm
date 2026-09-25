@@ -85,10 +85,21 @@ subjects:
     name: {{ .Release.Name }}-checkpoint
     namespace: {{ .Release.Namespace }}
 ---
-# The status document, created at install so the backend can tell "no eligible
-# checkpoint yet" from "the CronJob was deleted": an absent ConfigMap reads as
-# unknown, and this one reads as unprotected-with-an-age. The CronJob merges
-# into it; nothing else writes it.
+# THE OBJECT, AND NO DOCUMENT IN IT. Created at install so the backend can tell
+# "no eligible checkpoint yet" from "the CronJob was deleted": an absent
+# ConfigMap reads as unknown, this one reads as unprotected-with-no-checkpoint.
+# What gets published is the CronJob's business, not the chart's — the runner
+# merge-patches `data.status` (app/services/checkpoint_runner.py::_write_status)
+# and creates the object itself when it is missing — so `data` must NOT be
+# rendered here. It used to carry a placeholder document, and a server-side
+# apply (helm-controller's `--server-side=auto --force-conflicts=false`) then
+# collided with the runner's field manager on every upgrade after the first
+# checkpoint: `Apply failed with 1 conflict: conflict with "kubectl-patch" using
+# v1: .data.status` (hardware, 2026-09-25). A field a runtime writer owns is not
+# the chart's to write, and nothing was lost with the placeholder: the backend
+# takes the management cluster's id from the recorded control-plane kit
+# (app/services/management_cluster.py), and readers see "no document yet" as the
+# same thing the placeholder said.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -97,13 +108,6 @@ metadata:
   labels:
     {{- include "kubenest.labels" . | nindent 4 }}
     app.kubernetes.io/component: checkpoint
-data:
-  status: |
-    {
-      "management_cluster_id": {{ .Values.backend.managementClusterId | quote }},
-      "latest_eligible": null,
-      "drill": {"status": "never_run"}
-    }
 ---
 apiVersion: v1
 kind: ConfigMap
