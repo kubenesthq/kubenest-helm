@@ -235,6 +235,33 @@ redis:
     persistence:
       size: 1Gi
 
+# --- The maintenance fence (T7.0) ---
+# During a control-plane upgrade the public API route must not reach the
+# backend: the backend Deployment uses the Recreate strategy, its schema is
+# being migrated by a Job the CLI runs as a recorded step, and two versions of
+# the code must never serve at once. The CLI raises this fence and sets these
+# values; nothing sets them by hand.
+#
+# WHY A VALUE AND NOT A CLI PATCH OF THE ROUTE. helm-controller applies this
+# chart server-side with --force-conflicts=false, so a chart-rendered field
+# owned by a second writer makes the next chart apply fail — observed on
+# hardware on 2026-09-25 as `conflict with "kubectl-patch"`. Rendering the
+# fenced backendRef keeps it under helm, including during the chart apply that
+# runs inside the same upgrade.
+#
+# The fence's own objects (a ConfigMap carrying the maintenance message, a
+# Deployment answering 503 on every path and the Service this route points at)
+# are NOT rendered here: the CLI writes them into k3s's auto-deploy directory,
+# so they carry no chart version, need no backend code and survive a restart.
+fence:
+  # -- Point the api.<domain> route at the fence Service instead of the backend.
+  enabled: false
+  # -- Name of the fence Service. Empty means <release>-fence, which is what
+  # the CLI creates.
+  service: ""
+  # -- Port of the fence Service.
+  port: 8080
+
 # --- Migrations (kn-t47) ---
 # The migration used to run as a pod initContainer. It is now a Job a caller
 # asks for, because a migration that runs as a side effect of a pod start

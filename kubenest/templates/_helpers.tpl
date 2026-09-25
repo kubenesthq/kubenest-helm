@@ -212,3 +212,33 @@ differs per CronJob.
 - name: scratch
   mountPath: /scratch
 {{- end }}
+
+{{/*
+The Service the api.<domain> route points at (T7.0).
+
+THE MAINTENANCE FENCE GOES THROUGH A CHART VALUE, NOT A CLI PATCH. During a
+control-plane upgrade the CLI raises a fence: the public API route answers 503
+from a static page while the backend is stopped and its schema is migrated.
+Repointing the route from the CLI would make .spec.rules[0].backendRefs owned by
+a second field manager, and helm-controller applies this chart server-side with
+--force-conflicts=false — so the chart apply that runs INSIDE that same upgrade
+would fail with a conflict instead of upgrading the control plane. Rendering the
+fenced ref keeps every chart field under helm; the fence's own objects (the 503
+Deployment and its Service) are written by the CLI into k3s's auto-deploy
+directory, because helm does not render them and therefore cannot conflict.
+*/}}
+{{- define "kubenest.api.backendRef.name" -}}
+{{- if .Values.fence.enabled -}}
+{{- default (printf "%s-fence" .Release.Name) .Values.fence.service -}}
+{{- else -}}
+{{- printf "%s-backend" .Release.Name -}}
+{{- end -}}
+{{- end }}
+
+{{- define "kubenest.api.backendRef.port" -}}
+{{- if .Values.fence.enabled -}}
+{{- default 8080 .Values.fence.port -}}
+{{- else -}}
+{{- 8000 -}}
+{{- end -}}
+{{- end }}
