@@ -103,14 +103,15 @@ backend:
     # 675ff0e (2026-09-25; 7f63a7d was the first) is an image this chart can run: it reads
     # AGENT_JWT_SECRET, carries the checkpoint runner and postgresql-client-18,
     # and does not migrate on start when MIGRATE_ON_START=false. An older image
-    # needs the migrate initContainer this chart no longer has. 73b8762 carries
+    # needs the migrate initContainer this chart no longer has. c458014 carries
     # what an install with a backup target needs: the record routes accept the
     # installer's CLI token (640ede5), the configured admin is the instance
-    # administrator who may record the control-plane kit (9e9698d), and the
+    # administrator who may record the control-plane kit (9e9698d), the
     # management cluster's backup group folds the checkpoint status of the
-    # cluster the recorded control-plane kit names (73b8762).
-    tag: "73b8762"
-    digest: "sha256:ac0685494461841389cb169af94d57ae2ab5fe12b94ca3567969060509115fae"
+    # cluster the recorded control-plane kit names (73b8762), and a security
+    # change creates its checkpoint Job from the CronJob (c458014).
+    tag: "c458014"
+    digest: "sha256:19aa11c787cc4a79398b7d88d7f64946f73da2e26e3ba9965132398bcbb4b589"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
