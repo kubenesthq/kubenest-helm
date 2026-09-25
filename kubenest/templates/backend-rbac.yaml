@@ -31,6 +31,13 @@ rules:
   - apiGroups: [""]
     resources: [pods/log]
     verbs: [get]
+  # The control plane's own checkpoint status (kn-t47): the backend reads
+  # control-plane-checkpoint-status to report the management cluster's newest
+  # eligible checkpoint, its last restore drill and the security changes no
+  # checkpoint contains yet. Read only — the CronJob owns the write.
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

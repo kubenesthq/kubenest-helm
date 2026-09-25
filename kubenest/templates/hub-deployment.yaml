@@ -33,11 +33,15 @@ spec:
             - name: ws
               containerPort: 8001
           env:
-            - name: JWT_SECRET
+            # The hub holds ONE key, and it is the agent key: it verifies the
+            # operator/agent tokens and the backend's own client_type: backend
+            # token with it. It must not be given jwt-secret, which signs user
+            # sessions inside the backend and never leaves it (kn-t47).
+            - name: AGENT_JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ .Release.Name }}-secrets
-                  key: jwt-secret
+                  key: agent-jwt-secret
             - name: REDIS_URL
               value: "redis://{{ include "kubenest.redis.host" . }}:6379/0"
             - name: WS_PING_INTERVAL

@@ -1,0 +1,454 @@
+{{- if .Values.checkpoint.enabled }}
+{{- $tools := printf "%s@%s" .Values.checkpoint.tools.image.repository (required "checkpoint.tools.image.digest is required: every image in this chart is pinned by digest, and the tools image is the one that encrypts and uploads the checkpoint" .Values.checkpoint.tools.image.digest) }}
+{{- $postgres := printf "%s@%s" .Values.postgresql.image.repository (required "postgresql.image.digest is required: the checkpoint is dumped with this image so pg_dump matches the server major" .Values.postgresql.image.digest) }}
+{{- $scratch := printf "%s-checkpoint-scratch" .Release.Name }}
+{{- $drillScratch := printf "%s-checkpoint-drill-scratch" .Release.Name }}
+# THE CONTROL PLANE'S ONLY SUPPORTED RECOVERY PATH (kn-t47).
+#
+# WHAT IT IS FOR. The control plane's Postgres holds every organisation,
+# member, role, window, alert route, inventory and token floor in this
+# installation, and it was backed up nowhere: the bundled Postgres chart's
+# `pg_dumpall` runs on the same host and is off by default, so losing the host
+# lost the control plane permanently. This takes a LOGICAL checkpoint — the
+# database, not a copy of the host — encrypts it to the fleet recipient, and
+# uploads it with a manifest that says exactly what it is (control-plane
+# version, Postgres major and image, the roles and extensions `pg_restore`
+# needs, checksums, the management cluster's id).
+#
+# ELIGIBILITY IS THE LAST WRITE, NOT THE FIRST. The uploader publishes the
+# status ConfigMap only after every object is uploaded and verified, so a run
+# that dies halfway leaves the previous eligible checkpoint as the newest one.
+# A failed run can never leave an older file posing as a new one.
+#
+# THE TWO STEP SHAPES. initContainers are how the stages are ordered (dump,
+# then seal, then upload); the single app container is the one that publishes
+# the status, so a failed stage fails the pod before anything is offered as
+# eligible.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-checkpoint
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: checkpoint
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-checkpoint
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: checkpoint
+rules:
+  # The status ConfigMap is the record of what is eligible and whether the
+  # restore drill passed. Read to merge (the drill must not erase the
+  # checkpoint's own fields), written to publish.
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, create, update]
+  # The database password.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-checkpoint
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: checkpoint
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-checkpoint
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-checkpoint
+    namespace: {{ .Release.Namespace }}
+---
+# The status document, created at install so the backend can tell "no eligible
+# checkpoint yet" from "the CronJob was deleted": an absent ConfigMap reads as
+# unknown, and this one reads as unprotected-with-an-age. The CronJob merges
+# into it; nothing else writes it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: control-plane-checkpoint-status
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: checkpoint
+data:
+  status: |
+    {
+      "management_cluster_id": {{ .Values.backend.managementClusterId | quote }},
+      "latest_eligible": null,
+      "drill": {"status": "never_run"}
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-checkpoint-scripts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: checkpoint
+data:
+  # STAGE 1: the dump. Runs on the chart's own pinned Postgres image, so
+  # `pg_dump` matches the server's major BY CONSTRUCTION rather than by
+  # remembering to keep two pins in step.
+  dump.sh: |
+    set -euo pipefail
+    scratch=/scratch
+    stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    pg_dump --format=custom --no-owner --no-privileges --file="$scratch/control-plane.dump"
+    # The manifest is written HERE, by the process that has the server, and it
+    # records what `pg_restore` will need on the other side: the major version
+    # and the exact image, because a restore into a different Postgres major is
+    # refused rather than attempted (T4.8).
+    psql -Atc "SELECT version()" > "$scratch/server_version.txt"
+    psql -Atc "SELECT extname FROM pg_extension ORDER BY extname" > "$scratch/extensions.txt"
+    psql -Atc "SELECT rolname FROM pg_roles WHERE rolname NOT LIKE 'pg\_%' ORDER BY rolname" > "$scratch/roles.txt"
+    # Row counts per table, which is what the weekly drill compares against.
+    psql -Atc "SELECT relname || ' ' || n_live_tup FROM pg_stat_user_tables ORDER BY relname" > "$scratch/row_counts.txt"
+    size="$(stat -c %s "$scratch/control-plane.dump")"
+    sha="$(sha256sum "$scratch/control-plane.dump" | cut -d' ' -f1)"
+    cat > "$scratch/dump.json" <<JSON
+    {"stamp": "$stamp", "size_bytes": $size, "sha256": "$sha",
+     "postgres_major": "$(psql -Atc 'SHOW server_version_num' | cut -c1-2 | sed 's/^0//')",
+     "postgres_image": "${POSTGRES_IMAGE}"}
+    JSON
+    touch "$scratch/dump.done"
+  # STAGE 2: the envelope. `age` to the FLEET RECIPIENT — a public key. The
+  # private key never touches a host, so read access to the bucket is not read
+  # access to the database.
+  seal.sh: |
+    set -euo pipefail
+    scratch=/scratch
+    while [ ! -f "$scratch/dump.done" ]; do sleep 2; done
+    age --encrypt --recipient "$CHECKPOINT_RECIPIENT" --output "$scratch/control-plane.dump.age" "$scratch/control-plane.dump"
+    # The plaintext dump is deleted as soon as it is unreadable without the
+    # recipient's private key, so the scratch volume holding it is not a second
+    # unencrypted copy of the database.
+    rm -f "$scratch/control-plane.dump"
+    sha="$(sha256sum "$scratch/control-plane.dump.age" | cut -d' ' -f1)"
+    size="$(stat -c %s "$scratch/control-plane.dump.age")"
+    echo "$sha $size" > "$scratch/sealed.txt"
+    touch "$scratch/seal.done"
+  # STAGE 3: the upload. Every object first, the status LAST, so eligibility is
+  # only ever granted to a complete checkpoint.
+  upload.sh: |
+    set -euo pipefail
+    scratch=/scratch
+    while [ ! -f "$scratch/seal.done" ]; do sleep 2; done
+    read -r sha size < "$scratch/sealed.txt"
+    key="${CHECKPOINT_PREFIX}$(date -u +%Y/%m/%dT%H%M%SZ)-$CHECKPOINT_REASON"
+    jq -n \
+      --arg key "$key" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      --argjson dump "$(cat "$scratch/dump.json")" \
+      --arg sha "$sha" --argjson size "$size" \
+      --arg management_cluster_id "$KUBENEST_MANAGEMENT_CLUSTER_ID" \
+      --arg security_change_at "$CHECKPOINT_SECURITY_CHANGE_AT" \
+      --argjson retention "$CHECKPOINT_RETENTION_SECONDS" \
+      --arg control_plane_version "$CONTROL_PLANE_VERSION" \
+      --arg roles "$(tr '\n' ',' < "$scratch/roles.txt")" \
+      --arg extensions "$(tr '\n' ',' < "$scratch/extensions.txt")" \
+      --arg row_counts "$(tr '\n' ',' < "$scratch/row_counts.txt")" \
+      '{key: $key, at: $at, dump: $dump, envelope: {sha256: $sha, size_bytes: $size},
+        control_plane_version: $control_plane_version, retention_seconds: $retention,
+        management_cluster_id: $management_cluster_id,
+        security_change_at: (if $security_change_at == "" then null else $security_change_at end),
+        roles: $roles, extensions: $extensions, row_counts: $row_counts}' > "$scratch/manifest.json"
+    aws s3 cp "$scratch/manifest.json" "s3://${CHECKPOINT_BUCKET}/${key}/manifest.json"
+    aws s3 cp "$scratch/control-plane.dump.age" "s3://${CHECKPOINT_BUCKET}/${key}/control-plane.dump.age"
+    # READ BACK BEFORE DECLARING IT ELIGIBLE: an upload that returned 200 and
+    # stored nothing is the failure this checkpoint exists to survive.
+    remote_size="$(aws s3api head-object --bucket "$CHECKPOINT_BUCKET" --key "${key}/control-plane.dump.age" --query ContentLength --output text)"
+    [ "$remote_size" = "$size" ] || { echo "uploaded object is $remote_size bytes, expected $size" >&2; exit 1; }
+    echo "$key" > "$scratch/eligible_key.txt"
+  publish.sh: |
+    set -euo pipefail
+    scratch=/scratch
+    key="$(cat "$scratch/eligible_key.txt")"
+    manifest="$scratch/manifest.json"
+    ns="$KUBENEST_NAMESPACE"
+    # MERGED, NOT REPLACED: the drill result lives in the same document and a
+    # checkpoint that ran after a drill must not erase it.
+    current="$(kubectl -n "$ns" get configmap control-plane-checkpoint-status -o jsonpath='{.data.status}' 2>/dev/null || echo '{}')"
+    echo "$current" | jq \
+      --argjson manifest "$(cat "$manifest")" \
+      --arg management_cluster_id "$KUBENEST_MANAGEMENT_CLUSTER_ID" \
+      '. + {
+        management_cluster_id: $management_cluster_id,
+        latest_eligible: {
+          key: $manifest.key, at: $manifest.at,
+          size_bytes: $manifest.envelope.size_bytes,
+          sha256: $manifest.envelope.sha256,
+          postgres_major: ($manifest.dump.postgres_major | tonumber),
+          postgres_image: $manifest.dump.postgres_image,
+          control_plane_version: $manifest.control_plane_version,
+          retention_seconds: $manifest.retention_seconds,
+          security_change_at: $manifest.security_change_at,
+          includes_security_change_at: $manifest.security_change_at
+        }
+      }' > "$scratch/status.json"
+    kubectl -n "$ns" create configmap control-plane-checkpoint-status --from-file=status="$scratch/status.json" --dry-run=client -o yaml | kubectl -n "$ns" apply -f -
+  # THE WEEKLY DRILL. A checkpoint nobody has restored is a hope. One
+  # container per stage for the same reason as above: order, then one publisher.
+  fetch.sh: |
+    set -euo pipefail
+    scratch=/scratch
+    ns="$KUBENEST_NAMESPACE"
+    status="$(kubectl -n "$ns" get configmap control-plane-checkpoint-status -o jsonpath='{.data.status}')"
+    key="$(echo "$status" | jq -r '.latest_eligible.key // empty')"
+    [ -n "$key" ] || { echo "no eligible checkpoint to drill" >&2; exit 1; }
+    aws s3 cp "s3://${CHECKPOINT_BUCKET}/${key}/manifest.json" "$scratch/manifest.json"
+    aws s3 cp "s3://${CHECKPOINT_BUCKET}/${key}/control-plane.dump.age" "$scratch/control-plane.dump.age"
+    want="$(jq -r '.envelope.sha256' "$scratch/manifest.json")"
+    got="$(sha256sum "$scratch/control-plane.dump.age" | cut -d' ' -f1)"
+    [ "$want" = "$got" ] || { echo "checksum mismatch: $got != $want" >&2; exit 1; }
+    age --decrypt --identity "$CHECKPOINT_IDENTITY" --output "$scratch/control-plane.dump" "$scratch/control-plane.dump.age"
+    echo "$key" > "$scratch/drilled_key.txt"
+    touch "$scratch/fetch.done"
+  restore.sh: |
+    set -euo pipefail
+    scratch=/scratch
+    while [ ! -f "$scratch/fetch.done" ]; do sleep 2; done
+    # A SCRATCH CLUSTER INSIDE THE POD: the drill must not touch the running
+    # control plane's database, and it must not need a second Postgres.
+    export PGDATA="$scratch/pgdata"
+    initdb --auth=trust --username=postgres >/dev/null
+    pg_ctl -D "$PGDATA" -o "-c listen_addresses='' -c unix_socket_directories=$scratch" -w start
+    trap 'pg_ctl -D "$PGDATA" -m immediate stop >/dev/null 2>&1 || true' EXIT
+    createdb -h "$scratch" -U postgres restored
+    pg_restore -h "$scratch" -U postgres -d restored --no-owner --no-privileges "$scratch/control-plane.dump"
+    psql -h "$scratch" -U postgres -d restored -Atc \
+      "SELECT relname || ' ' || n_live_tup FROM pg_stat_user_tables ORDER BY relname" > "$scratch/restored_row_counts.txt"
+    pg_ctl -D "$PGDATA" -m fast -w stop
+    touch "$scratch/restore.done"
+  verify.sh: |
+    set -euo pipefail
+    scratch=/scratch
+    ns="$KUBENEST_NAMESPACE"
+    key="$(cat "$scratch/drilled_key.txt")"
+    at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    # ROW COUNTS, TABLE BY TABLE. A dump that opens but restored half its rows
+    # is the failure a "restore succeeded" exit code cannot see.
+    declared="$(jq -r '.row_counts' "$scratch/manifest.json" | tr ',' '\n' | sed '/^$/d' | awk '{print $1" "$2}' | sort)"
+    restored="$(sort "$scratch/restored_row_counts.txt")"
+    if [ "$declared" = "$restored" ]; then
+      drill="{\"status\": \"passed\", \"completed_at\": \"$at\", \"checkpoint\": \"$key\", \"row_counts_matched\": true}"
+    else
+      drill="{\"status\": \"failed\", \"completed_at\": \"$at\", \"checkpoint\": \"$key\", \"detail\": \"row counts differ between the manifest and the restore\"}"
+    fi
+    current="$(kubectl -n "$ns" get configmap control-plane-checkpoint-status -o jsonpath='{.data.status}')"
+    echo "$current" | jq --argjson drill "$drill" '. + {drill: $drill}' > "$scratch/status.json"
+    kubectl -n "$ns" create configmap control-plane-checkpoint-status --from-file=status="$scratch/status.json" --dry-run=client -o yaml | kubectl -n "$ns" apply -f -
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}-checkpoint
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: checkpoint
+spec:
+  schedule: {{ .Values.checkpoint.schedule | quote }}
+  # One at a time: two concurrent dumps of the same database is load for no
+  # benefit, and a missed run is retried by the next one.
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      # The Job object is kept for the checkpoint's own retention, so its logs
+      # outlive the sweep that created it.
+      ttlSecondsAfterFinished: {{ mul .Values.checkpoint.retentionHours 3600 }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/component: checkpoint
+            app.kubernetes.io/instance: {{ .Release.Name }}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ .Release.Name }}-checkpoint
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+          initContainers:
+            - name: dump
+              image: {{ $postgres | quote }}
+              imagePullPolicy: IfNotPresent
+              command: ["/scripts/dump.sh"]
+              env:
+                {{- include "kubenest.checkpoint.env" . | nindent 16 }}
+                - name: POSTGRES_IMAGE
+                  value: {{ $postgres | quote }}
+              volumeMounts:
+                {{- include "kubenest.checkpoint.mounts" . | nindent 16 }}
+            - name: seal
+              image: {{ $tools | quote }}
+              imagePullPolicy: {{ .Values.checkpoint.tools.image.pullPolicy }}
+              command: ["/scripts/seal.sh"]
+              env:
+                {{- include "kubenest.checkpoint.env" . | nindent 16 }}
+                - name: CHECKPOINT_RECIPIENT
+                  value: {{ required "checkpoint.recipient is required: it is the fleet recipient's age public key" .Values.checkpoint.recipient | quote }}
+              volumeMounts:
+                {{- include "kubenest.checkpoint.mounts" . | nindent 16 }}
+            - name: upload
+              image: {{ $tools | quote }}
+              imagePullPolicy: {{ .Values.checkpoint.tools.image.pullPolicy }}
+              command: ["/scripts/upload.sh"]
+              env:
+                {{- include "kubenest.checkpoint.env" . | nindent 16 }}
+              volumeMounts:
+                {{- include "kubenest.checkpoint.mounts" . | nindent 16 }}
+          containers:
+            - name: publish
+              image: {{ $tools | quote }}
+              imagePullPolicy: {{ .Values.checkpoint.tools.image.pullPolicy }}
+              command: ["/scripts/publish.sh"]
+              env:
+                {{- include "kubenest.checkpoint.env" . | nindent 16 }}
+              resources:
+                {{- toYaml .Values.checkpoint.resources | nindent 16 }}
+              volumeMounts:
+                {{- include "kubenest.checkpoint.mounts" . | nindent 16 }}
+          volumes:
+            - name: scripts
+              configMap:
+                name: {{ .Release.Name }}-checkpoint-scripts
+                defaultMode: 0555
+            - name: scratch
+              persistentVolumeClaim:
+                claimName: {{ $scratch }}
+---
+# DEDICATED SCRATCH STORAGE. Not an emptyDir: the dump of a customer's whole
+# control plane does not belong on the node's disk, where a full node evicts
+# the pod mid-dump and leaves a partial file behind.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $scratch }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: checkpoint
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.checkpoint.scratch.size }}
+  {{- with .Values.checkpoint.scratch.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+---
+# The drill gets its OWN scratch volume: both CronJobs are ReadWriteOnce and
+# the drill's `initdb` would otherwise wipe a dump that is still being taken.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $drillScratch }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: checkpoint
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.checkpoint.scratch.size }}
+  {{- with .Values.checkpoint.scratch.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}-checkpoint-drill
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: checkpoint
+spec:
+  schedule: {{ .Values.checkpoint.drillSchedule | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: {{ mul .Values.checkpoint.retentionHours 3600 }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/component: checkpoint
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            kubenest.io/purpose: restore-drill
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ .Release.Name }}-checkpoint
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+          initContainers:
+            - name: fetch
+              image: {{ $tools | quote }}
+              imagePullPolicy: {{ .Values.checkpoint.tools.image.pullPolicy }}
+              command: ["/scripts/fetch.sh"]
+              env:
+                {{- include "kubenest.checkpoint.env" . | nindent 16 }}
+                # The drill's DECRYPTION key, held by the control plane's own
+                # Secret and by nobody else on the host. A drill that cannot
+                # decrypt is a drill that proves nothing.
+                - name: CHECKPOINT_IDENTITY
+                  value: /checkpoint-identity/identity.txt
+              volumeMounts:
+                {{- include "kubenest.checkpoint.mounts" . | nindent 16 }}
+                - name: identity
+                  mountPath: /checkpoint-identity
+                  readOnly: true
+            - name: restore
+              image: {{ $postgres | quote }}
+              imagePullPolicy: IfNotPresent
+              command: ["/scripts/restore.sh"]
+              env:
+                {{- include "kubenest.checkpoint.env" . | nindent 16 }}
+              volumeMounts:
+                {{- include "kubenest.checkpoint.mounts" . | nindent 16 }}
+          containers:
+            - name: verify
+              image: {{ $tools | quote }}
+              imagePullPolicy: {{ .Values.checkpoint.tools.image.pullPolicy }}
+              command: ["/scripts/verify.sh"]
+              env:
+                {{- include "kubenest.checkpoint.env" . | nindent 16 }}
+              resources:
+                {{- toYaml .Values.checkpoint.resources | nindent 16 }}
+              volumeMounts:
+                {{- include "kubenest.checkpoint.mounts" . | nindent 16 }}
+          volumes:
+            - name: scripts
+              configMap:
+                name: {{ .Release.Name }}-checkpoint-scripts
+                defaultMode: 0555
+            - name: scratch
+              persistentVolumeClaim:
+                claimName: {{ $drillScratch }}
+            - name: identity
+              secret:
+                secretName: {{ .Values.checkpoint.identitySecret }}
+                optional: false
+{{- end }}

@@ -1,0 +1,84 @@
+{{- if .Values.migration.enabled }}
+# THE MIGRATION JOB (kn-t47), rendered only when a caller asks for it.
+#
+# A FRESH INSTALL DOES NOT RUN IT. There is nothing to migrate into an empty
+# database until a recovery install has restored a checkpoint, and running
+# `alembic upgrade head` before that restore would create a schema the
+# checkpoint then fails to load. The CLI creates this Job once, as a recorded
+# step of the operation (the upgrade fence, the ordering and the rollback are
+# T7.0's), and the backend refuses to start until the database's recorded
+# revision matches its code — so the migration has to be run, and its result is
+# observable rather than a side effect of a pod starting.
+#
+# The env is the backend's own: the migration chain encrypts at rest and needs
+# ENCRYPTION_KEY, and it creates the tables the backend then reads.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-migrate
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+    kubenest.io/purpose: migration
+  {{- with .Values.installRevision }}
+  annotations:
+    kubenest.io/install-revision: {{ . | quote }}
+  {{- end }}
+spec:
+  # ONE ATTEMPT, AND THE JOB OBJECT STAYS UNTIL THE OPERATION RECORD IS READ.
+  # A retried migration is a migration nobody watched; an interrupted one is
+  # exactly what T7.0's fence and rollback exist for.
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        kubenest.io/purpose: migration
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ .Release.Name }}-backend
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: "{{ include "kubenest.image" .Values.backend.image }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          command: ["alembic", "upgrade", "head"]
+          env:
+            - name: POSTGRES_SERVER
+              value: {{ include "kubenest.postgresql.host" . | quote }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgresql.auth.username | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-postgresql
+                  key: password
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.auth.database | quote }}
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: jwt-secret
+            - name: AGENT_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: agent-jwt-secret
+            # The migration chain encrypts at rest (20260910_encrypt_cluster_bearer),
+            # and the backend refuses to derive that key from SECRET_KEY, so a
+            # database cannot migrate without this.
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: encryption-key
+{{- end }}

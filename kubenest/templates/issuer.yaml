@@ -1,0 +1,42 @@
+{{- if .Values.gateway.enabled }}
+# The control plane's own certificate authority (kn-t47).
+#
+# WHY THE CONTROL PLANE ISSUES ITS OWN. Its TLS identity used to come from the
+# host cluster's ClusterIssuer (cert-manager/kubenest-ca). Every CLI pins the
+# control plane's CA and every agent trusts exactly one, so a control plane
+# restored or moved onto another cluster was rejected as an unknown authority —
+# the restore could not be trusted. The CLI generates this CA at install and
+# hands the certificate and its key over in `gatewayCA`; both travel in the
+# control-plane kit, so the identity survives a restore or a move.
+#
+# It is an Issuer, not a ClusterIssuer: it is this release's identity, in this
+# release's namespace, and nothing else in the cluster should be able to have
+# certificates signed by it.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-ca
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+type: kubernetes.io/tls
+stringData:
+  tls.crt: {{ required "gatewayCA.certificate is required: the CLI generates the control-plane CA and passes it here" .Values.gatewayCA.certificate | quote }}
+  # THE PRIVATE KEY IS PART OF THE RECOVERY SET. Without it a restored control
+  # plane cannot renew its own certificate, and every CLI and agent that pinned
+  # this CA would have to be re-pinned by hand.
+  tls.key: {{ required "gatewayCA.privateKey is required: the control-plane kit carries the CA key" .Values.gatewayCA.privateKey | quote }}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Release.Name }}-ca
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubenest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  ca:
+    secretName: {{ .Release.Name }}-ca
+{{- end }}

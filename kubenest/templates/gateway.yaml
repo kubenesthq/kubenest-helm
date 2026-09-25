@@ -17,9 +17,14 @@ metadata:
     app.kubernetes.io/component: gateway
 spec:
   secretName: {{ .Release.Name }}-tls
+  # THE CONTROL PLANE'S OWN CA (kn-t47), created by templates/issuer.yaml from
+  # the CLI-generated CA in gatewayCA. Not the host cluster's ClusterIssuer:
+  # every CLI and agent pins the control plane's CA, and taking the identity
+  # from the host meant a control plane restored onto another cluster was
+  # rejected as an unknown authority.
   issuerRef:
-    kind: ClusterIssuer
-    name: {{ .Values.gateway.issuer }}
+    kind: Issuer
+    name: {{ .Release.Name }}-ca
   dnsNames:
     - {{ include "kubenest.ui.host" . }}
     - {{ include "kubenest.backend.host" . }}

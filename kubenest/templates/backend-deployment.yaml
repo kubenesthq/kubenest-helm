@@ -7,6 +7,13 @@ metadata:
     app.kubernetes.io/component: backend
 spec:
   replicas: {{ .Values.backend.replicas }}
+  # RECREATE, NOT ROLLING (kn-t47). The backend refuses to start on a schema
+  # its code does not match, and the schema is migrated by a Job the CLI
+  # records as an operation step — so two versions must never be serving at the
+  # same time, and a rolling update is exactly the window in which an old pod
+  # and a migrated database coexist.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/component: backend
@@ -26,38 +33,12 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      initContainers:
-        - name: migrate
-          image: "{{ include "kubenest.image" .Values.backend.image }}"
-          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
-          command: ["alembic", "upgrade", "head"]
-          env:
-            - name: POSTGRES_SERVER
-              value: {{ include "kubenest.postgresql.host" . | quote }}
-            - name: POSTGRES_USER
-              value: {{ .Values.postgresql.auth.username | quote }}
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-postgresql
-                  key: password
-            - name: POSTGRES_DB
-              value: {{ .Values.postgresql.auth.database | quote }}
-            - name: POSTGRES_PORT
-              value: "5432"
-            - name: SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-secrets
-                  key: jwt-secret
-            # The migration chain encrypts at rest (20260910_encrypt_cluster_bearer),
-            # and the backend refuses to derive that key from SECRET_KEY, so a
-            # fresh database cannot migrate without this.
-            - name: ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-secrets
-                  key: encryption-key
+      # NO migrate initContainer (kn-t47). "alembic upgrade head" as a side
+      # effect of a pod start made an upgrade unobservable and unresumable, and
+      # it ran on every restart of a Deployment whose code had not changed.
+      # The migration is a Job the CLI creates once, as a recorded step of the
+      # operation; the backend then refuses to start until the database's
+      # revision matches the code's.
       containers:
         - name: backend
           image: "{{ include "kubenest.image" .Values.backend.image }}"
@@ -95,6 +76,14 @@ spec:
                 secretKeyRef:
                   name: {{ .Release.Name }}-secrets
                   key: jwt-secret
+            # The key agent tokens and the backend's own hub token are signed
+            # with (kn-t47). Not jwt-secret: the hub verifies with THIS, and
+            # SECRET_KEY must never leave this process.
+            - name: AGENT_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: agent-jwt-secret
             - name: REDIS_CACHE_HOST
               value: {{ include "kubenest.redis.host" . | quote }}
             - name: REDIS_QUEUE_HOST
@@ -123,6 +112,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            # Which cluster this control plane runs in, so the checkpoint and
+            # the restore drill are reported in THAT cluster's `backup` group
+            # (kn-t47). Empty means they are reported nowhere.
+            - name: KUBENEST_MANAGEMENT_CLUSTER_ID
+              value: {{ .Values.backend.managementClusterId | quote }}
           readinessProbe:
             httpGet:
               path: /api/v1/ready
