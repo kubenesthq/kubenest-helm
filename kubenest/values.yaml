@@ -290,9 +290,13 @@ checkpoint:
   # `kubenest backup set-target` manages.
   credentialsSecret: "kubenest-cp-checkpoint-credentials"
   # -- Scratch space for the dump, the encrypted copy and the restore drill's
-  # scratch cluster. Sized for the control plane's database plus a restore.
+  # scratch cluster. There are TWO such claims (the checkpoint's and the
+  # drill's), both at this size, so it is sized as twice the Postgres volume
+  # above (a dump plus a restored copy), not larger: at 20Gi each the claims
+  # did not fit beside the rest of the control plane on a 50 GB data volume,
+  # and the weekly drill's pod could never be scheduled (lab, 2026-09-25).
   scratch:
-    size: 20Gi
+    size: 10Gi
     storageClassName: ""
   # THE IMAGE THE CHECKPOINT RUNS IN IS THE BACKEND'S, above, and there is no
   # separate tools image. That image is already pinned by digest, and it now
