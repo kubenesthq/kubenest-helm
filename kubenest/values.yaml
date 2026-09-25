@@ -100,8 +100,12 @@ backend:
     # and 132b7ea, whose catalog serves bundle 1.1. A control plane that
     # cannot serve 1.1 cannot upgrade a cluster to it. An image older than
     # efd4540 would re-create the two-writer identity Secret collision.
-    tag: "132b7ea"
-    digest: "sha256:86ec31d412d52d68f00688c664cea7e279bfb64ab70dd967c42d162d99e498c0"
+    # 675ff0e (2026-09-25; 7f63a7d was the first) is an image this chart can run: it reads
+    # AGENT_JWT_SECRET, carries the checkpoint runner and postgresql-client-18,
+    # and does not migrate on start when MIGRATE_ON_START=false. An older image
+    # needs the migrate initContainer this chart no longer has.
+    tag: "675ff0e"
+    digest: "sha256:0f4e826d72cc64526e12efd26bee06434a3cea2bb8f2838ab8fbcc5ba34fa09e"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
@@ -140,8 +144,11 @@ hub:
     # 094b95e3b3ab347a54fd54309eea5144653d5f89 — the hub only recently learned
     # to stamp that (kn-xl9u); before it did, a hub image could be pinned but
     # not identified.
-    tag: "094b95e"
-    digest: "sha256:aa3deaeca21dda4542df1116b0bb873f05eaf4796b4d3a8583a2d0c4caf0fac8"
+    # 120baa5 (2026-09-25): the first hub that verifies agents with
+    # AGENT_JWT_SECRET (it no longer reads JWT_SECRET, so an older hub crashes
+    # under this chart) and understands the maintenance-window events.
+    tag: "120baa5"
+    digest: "sha256:ccb444ae8e35d107bc7a89dd32f0c89f69aa33fdb3bbb649679040ba48557cf5"
     pullPolicy: IfNotPresent
   replicas: 1
   resources:
@@ -196,7 +203,11 @@ postgresql:
     # `postgresql-client-18` in kubenest-backend's Dockerfile, which is what
     # takes the dump. A client older than its server refuses to dump it, so the
     # Dockerfile's major is a fact about this value and not a separate choice.
-    repository: docker.io/bitnami/postgresql
+    # No registry prefix: the Bitnami subchart prepends its own registry, and
+    # "docker.io/bitnami/postgresql" rendered as an unpullable
+    # registry-1.docker.io/docker.io/bitnami/postgresql (found on real hardware
+    # 2026-09-25). Unqualified, the checkpoint templates resolve it on Docker Hub.
+    repository: bitnami/postgresql
     # -- Pinned to the digest bitnami/postgresql:latest resolved to on
     # 2026-09-24, so the chart installs the same bytes offline.
     digest: "sha256:7d77a46bbf200709237318c27dec0eaeae2520e403dd18fdebde2be7a6b04993"
