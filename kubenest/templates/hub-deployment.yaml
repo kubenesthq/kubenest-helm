@@ -44,6 +44,12 @@ spec:
               value: "30s"
             - name: WS_PONG_TIMEOUT
               value: "60s"
+            # kn-nahc: refuse a credential presented as a URL query parameter. The
+            # hub's Go default stays true for deployments still inside the migration
+            # window; the control plane, whose operator and backend are header-only,
+            # is where the fallback is turned off.
+            - name: WS_ALLOW_QUERY_CREDENTIAL
+              value: "false"
           readinessProbe:
             httpGet:
               path: /ready
