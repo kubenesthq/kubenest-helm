@@ -190,9 +190,12 @@ postgresql:
     password: ""
     database: kubenest
   image:
-    # -- The repository the digest below belongs to. Stated here because the
-    # checkpoint CronJob dumps with THIS image: `pg_dump` must match the
-    # server's major by construction, so the two must name the same bytes.
+    # -- The repository the digest below belongs to. Stated here because TWO
+    # things must agree with this image's MAJOR: the checkpoint CronJob's
+    # scratch Postgres (the drill restores into a server of THIS image), and
+    # `postgresql-client-18` in kubenest-backend's Dockerfile, which is what
+    # takes the dump. A client older than its server refuses to dump it, so the
+    # Dockerfile's major is a fact about this value and not a separate choice.
     repository: docker.io/bitnami/postgresql
     # -- Pinned to the digest bitnami/postgresql:latest resolved to on
     # 2026-09-24, so the chart installs the same bytes offline.
@@ -273,15 +276,13 @@ checkpoint:
   scratch:
     size: 20Gi
     storageClassName: ""
-  # -- The tools image: `age`, the AWS CLI, `kubectl` and `jq`. PINNED BY
-  # DIGEST like every other image here, and supplied by the installer because
-  # the digest is what identifies the build.
-  tools:
-    image:
-      repository: ghcr.io/kubenesthq/checkpoint-tools
-      tag: ""
-      digest: ""
-      pullPolicy: IfNotPresent
+  # THE IMAGE THE CHECKPOINT RUNS IN IS THE BACKEND'S, above, and there is no
+  # separate tools image. That image is already pinned by digest, and it now
+  # carries `pg_dump` and `age` (kubenest-backend's Dockerfile). The tools
+  # image this used to name had no digest anywhere on the install path, so the
+  # CronJob could not render and the control plane went unprotected — which is
+  # the whole reason there is no longer a second place to pin an image.
+  #
   # -- A single checkpoint's own resource ceiling. The dump is I/O bound.
   resources:
     requests:

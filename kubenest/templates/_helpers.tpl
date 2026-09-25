@@ -117,6 +117,12 @@ ONE DEFINITION because the backend creates a Job from THIS pod template. If the
 env were written per container, a Job the backend created could differ from a
 Job the schedule created, and the difference would only show up during a
 recovery.
+
+EVERY CONTAINER GETS ALL OF IT because every stage of the entrypoint
+(app/services/checkpoint_runner.py) resolves the same request from the
+environment: the fetch stage needs the bucket and the object store, the
+restore stage needs the database, and the verify stage needs the namespace it
+publishes the drill's result into.
 */}}
 {{- define "kubenest.checkpoint.env" -}}
 - name: POSTGRES_SERVER
@@ -132,6 +138,23 @@ recovery.
     secretKeyRef:
       name: {{ .Release.Name }}-postgresql
       key: password
+# The SERVER image, recorded in every checkpoint's manifest: a restore into a
+# different Postgres major is refused rather than attempted (T4.8), and the
+# client in the backend image that dumped it must be this major's too.
+- name: POSTGRES_IMAGE
+  value: {{ include "kubenest.image" .Values.postgresql.image | quote }}
+# The checkpoint Job must never write to the schema it is dumping. `command`
+# on every checkpoint container replaces the image's entrypoint, so this is
+# already true; it is set here because the one thing this Job must not do is
+# migrate a database that is being restored from, and a belt is cheaper than
+# an explanation of why the braces were unnecessary.
+- name: MIGRATE_ON_START
+  value: "false"
+# REQUIRED, and here rather than on one container: the recipient is the PUBLIC
+# half of the fleet key, so every stage may hold it, and every stage builds a
+# request from this environment.
+- name: CHECKPOINT_RECIPIENT
+  value: {{ required "checkpoint.recipient is required: it is the fleet recipient's age public key, and a checkpoint nobody can open is not a recovery point" .Values.checkpoint.recipient | quote }}
 - name: KUBENEST_NAMESPACE
   valueFrom:
     fieldRef:

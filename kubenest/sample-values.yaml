@@ -26,11 +26,16 @@ backend:
 
 # The control-plane checkpoint CronJob (kn-t47): the only supported recovery
 # path for the control plane's own database. The recipient is the FLEET public
-# key (it can only encrypt); the tools image is pinned by digest like every
-# other image here.
+# key (it can only encrypt). The job runs the BACKEND image — the one pinned
+# above, which carries `pg_dump` and `age` — so there is no tools image to
+# name here.
+#
+# `credentialsSecret` defaults to kubenest-cp-checkpoint-credentials, and the
+# chart expects it to exist: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+# AWS_DEFAULT_REGION and (for an S3-compatible store) AWS_ENDPOINT_URL. It is
+# the CONTROL PLANE's own principal, separate from every cluster's backup
+# credential — `kubenest platform install --control-plane` creates it when it
+# is given a backup target.
 checkpoint:
   recipient: "age1replacewiththefleetrecipientpublickey"
   bucket: "replace-with-the-control-plane-checkpoint-bucket"
-  tools:
-    image:
-      digest: "sha256:replace-with-the-checklist-tools-image-digest"
