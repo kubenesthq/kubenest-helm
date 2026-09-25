@@ -103,9 +103,11 @@ backend:
     # 675ff0e (2026-09-25; 7f63a7d was the first) is an image this chart can run: it reads
     # AGENT_JWT_SECRET, carries the checkpoint runner and postgresql-client-18,
     # and does not migrate on start when MIGRATE_ON_START=false. An older image
-    # needs the migrate initContainer this chart no longer has.
-    tag: "675ff0e"
-    digest: "sha256:0f4e826d72cc64526e12efd26bee06434a3cea2bb8f2838ab8fbcc5ba34fa09e"
+    # needs the migrate initContainer this chart no longer has. 640ede5 adds
+    # the installer's CLI token on the recovery-kit record routes, without which
+    # an install with a backup target fails at its recovery-kit stage.
+    tag: "640ede5"
+    digest: "sha256:fc688aa1da845fc19e7b6808f076f040adfb86d2d35e2e3cd332b5bfdade6bd4"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
