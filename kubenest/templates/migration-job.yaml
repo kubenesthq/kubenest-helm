@@ -50,6 +50,13 @@ spec:
           imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
           command: ["alembic", "upgrade", "head"]
           env:
+            # The Job migrates through its own command, above. The image's
+            # entrypoint migrates too when MIGRATE_ON_START is not "false", and
+            # the Job must run the migration EXACTLY ONCE: a second `alembic
+            # upgrade head` in the same container is a second writer of the
+            # schema whose outcome the Job's log does not explain.
+            - name: MIGRATE_ON_START
+              value: "false"
             - name: POSTGRES_SERVER
               value: {{ include "kubenest.postgresql.host" . | quote }}
             - name: POSTGRES_USER

@@ -60,6 +60,21 @@ spec:
               value: {{ .Values.postgresql.auth.database | quote }}
             - name: POSTGRES_PORT
               value: "5432"
+            # THE BACKEND DOES NOT MIGRATE ITSELF (kn-t47). The image's
+            # entrypoint runs `alembic upgrade head` when this is not "false",
+            # and with it on, every pod start migrated the database: the
+            # previous release's code could be serving a schema a newer
+            # migration had already changed, a fresh install migrated an empty
+            # database before a checkpoint could be restored into it, and a
+            # migration could be neither observed nor resumed.
+            #
+            # Off, the migration is the Job (templates/migration-job.yaml) the
+            # CLI runs as a recorded step of the operation, the backend refuses
+            # to start on a schema its code does not match
+            # (app/core/schema.py), and the pod a migration fails in is a Job
+            # pod whose log says why rather than a backend that restarted.
+            - name: MIGRATE_ON_START
+              value: "false"
             - name: SECRET_KEY
               valueFrom:
                 secretKeyRef:
