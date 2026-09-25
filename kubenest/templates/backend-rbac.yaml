@@ -38,6 +38,15 @@ rules:
   - apiGroups: [""]
     resources: [configmaps]
     verbs: [get]
+  # Security-triggered checkpoints (kn-t47): on a token-floor raise, a member
+  # removal or a revoked CLI token the backend creates a Job from the checkpoint
+  # CronJob's template, so it reads that one CronJob. Without this the request
+  # failed with HTTP 403 on a real control plane (2026-09-25) and no revocation
+  # was ever covered by a checkpoint.
+  - apiGroups: [batch]
+    resources: [cronjobs]
+    resourceNames: [{{ .Release.Name }}-checkpoint]
+    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
