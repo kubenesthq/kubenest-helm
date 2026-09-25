@@ -111,8 +111,10 @@ backend:
     # cluster the recorded control-plane kit names (73b8762), a security change
     # creates its checkpoint Job from the CronJob (c458014), and a status
     # ConfigMap with nothing published yet reads as "no checkpoint" (c121ed8).
-    tag: "c121ed8"
-    digest: "sha256:661775bbd2c1f457ed898939bc2442a77a29fba4f3c0f095a133f39bc3a8aa58"
+    # 2a7dc07 adds the control plane's identity (contract era and build) to the
+    # cluster record and the management cluster's backup group (kn-t70).
+    tag: "2a7dc07"
+    digest: "sha256:9ebe7efcf8af9888fec3aae9005e5f70e8c4258971027811896e80806dd25f3c"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
