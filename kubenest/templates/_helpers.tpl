@@ -118,11 +118,13 @@ env were written per container, a Job the backend created could differ from a
 Job the schedule created, and the difference would only show up during a
 recovery.
 
-EVERY CONTAINER GETS ALL OF IT because every stage of the entrypoint
-(app/services/checkpoint_runner.py) resolves the same request from the
-environment: the fetch stage needs the bucket and the object store, the
-restore stage needs the database, and the verify stage needs the namespace it
-publishes the drill's result into.
+THE DUMP AND SEAL CONTAINERS GET ALL OF IT because both are stages of the
+entrypoint (app/services/checkpoint_runner.py) and both resolve the same request
+from the environment: the dump stage needs the database and the seal stage needs
+the bucket, the recipient and the namespace it publishes the drill into. The
+restore stage between them gets NONE of it: it loads the dump into a scratch
+cluster over a unix socket inside the pod, so it needs neither the control
+plane's database nor the object store.
 */}}
 {{- define "kubenest.checkpoint.env" -}}
 - name: POSTGRES_SERVER
@@ -201,9 +203,10 @@ publishes the drill's result into.
 {{- end }}
 
 {{/*
-Where a checkpoint container keeps its scratch space. The script and scratch
-volumes are the SAME everywhere, so this is shared even though the claim name
-differs per CronJob.
+Where the restore stage keeps its script and its scratch space. Both mounts
+belong to one container — the restore stage is the only one that needs the
+script, and every stage needs the scratch volume — so this is shared rather than
+written twice.
 */}}
 {{- define "kubenest.checkpoint.mounts" -}}
 - name: scripts

@@ -113,8 +113,11 @@ backend:
     # ConfigMap with nothing published yet reads as "no checkpoint" (c121ed8).
     # 2a7dc07 adds the control plane's identity (contract era and build) to the
     # cluster record and the management cluster's backup group (kn-t70).
-    tag: "2a7dc07"
-    digest: "sha256:9ebe7efcf8af9888fec3aae9005e5f70e8c4258971027811896e80806dd25f3c"
+    # 279b285 runs the checkpoint as the dump and seal stages around this
+    # chart's restore stage, so each checkpoint proves it restores before it
+    # is sealed and no drill key is needed (kn-drill-identity-u6il).
+    tag: "279b285"
+    digest: "sha256:9425657f5be8ef911262f511feb505a2d0cdf7bdf5fb55ad5a99bb2e58e0ad07"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
@@ -138,7 +141,7 @@ backend:
   crudAdmin:
     enabled: false
   # -- The cluster id THIS control plane runs in, as the installer registered
-  # it. The newest eligible checkpoint and the weekly restore drill are that
+  # it. The newest eligible checkpoint and its restore drill are that
   # cluster's own recovery facts and are merged into its `backup` verdict
   # (kn-t47); empty means they are reported nowhere, which is the honest state
   # until the installer fills this in.
@@ -282,15 +285,11 @@ migration:
 # Postgres chart's same-host `pg_dumpall` and the live data directory are not
 # recovery paths (a lost host takes them with it).
 checkpoint:
-  # -- Render the checkpoint CronJob and the weekly restore drill.
+  # -- Render the checkpoint CronJob.
   enabled: true
   # -- Nightly, in the CHART's cron syntax. The job name is stable, because the
   # backend derives a security-triggered Job from this object (kn-t47).
   schedule: "17 2 * * *"
-  # -- Weekly restore drill. It restores the newest eligible checkpoint into a
-  # scratch Postgres inside the same pod and checks that it opens and that the
-  # row counts match the manifest.
-  drillSchedule: "43 4 * * 0"
   # -- How long a nightly checkpoint's objects are kept. THE FLOOR IS 14 DAYS:
   # a shorter retention cannot be handed to a customer as a recovery history.
   retentionHours: 336
@@ -307,23 +306,16 @@ checkpoint:
   # credential).
   bucket: ""
   prefix: "control-plane/"
-  # -- Secret holding the DRILL's `age` identity (the fleet private key). The
-  # drill decrypts the newest checkpoint to restore it, so this key has to be
-  # present on the host the drill runs on — unlike the recipient, which is
-  # public. It is the one place the fleet key touches a host, and it is a
-  # Secret the installer writes, not something the chart generates.
-  identitySecret: "kubenest-cp-checkpoint-identity"
   # -- Secret holding the object-store credentials. Keys: AWS_ACCESS_KEY_ID,
   # AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION, and AWS_ENDPOINT_URL for an
   # S3-compatible store. Created outside the chart, like the backup credentials
   # `kubenest backup set-target` manages.
   credentialsSecret: "kubenest-cp-checkpoint-credentials"
-  # -- Scratch space for the dump, the encrypted copy and the restore drill's
-  # scratch cluster. There are TWO such claims (the checkpoint's and the
-  # drill's), both at this size, so it is sized as twice the Postgres volume
-  # above (a dump plus a restored copy), not larger: at 20Gi each the claims
-  # did not fit beside the rest of the control plane on a 50 GB data volume,
-  # and the weekly drill's pod could never be scheduled (lab, 2026-09-25).
+  # -- Scratch space for the dump, its ciphertext and the scratch cluster the
+  # restore stage loads it into. ONE claim, and 10Gi is what a control plane's
+  # database plus its restored copy fits in: at 20Gi the claims did not fit
+  # beside the rest of the control plane on a 50 GB data volume, and the pod
+  # could never be scheduled (lab, 2026-09-25).
   scratch:
     size: 10Gi
     storageClassName: ""

@@ -2,7 +2,6 @@
 {{- $checkpoint := include "kubenest.image" .Values.backend.image }}
 {{- $postgres := printf "%s@%s" .Values.postgresql.image.repository (required "postgresql.image.digest is required: the checkpoint's scratch Postgres is this image, and it has to be the same major as the client in the backend image that dumps through it" .Values.postgresql.image.digest) }}
 {{- $scratch := printf "%s-checkpoint-scratch" .Release.Name }}
-{{- $drillScratch := printf "%s-checkpoint-drill-scratch" .Release.Name }}
 # THE CONTROL PLANE'S ONLY SUPPORTED RECOVERY PATH (kn-t47).
 #
 # WHAT IT IS FOR. The control plane's Postgres holds every organisation,
@@ -15,24 +14,50 @@
 # version, Postgres major and image, the roles and extensions `pg_restore`
 # needs, row counts, checksums, the management cluster's id).
 #
-# ONE IMAGE, THE BACKEND'S. The checkpoint is taken by the backend image's own
-# entrypoint (`app/services/checkpoint_runner.py`), which is the image the chart
-# already pins by digest. It carries `pg_dump` (postgresql-client, the same
-# major as the Postgres above) and `age`, so there is no second image to build,
-# publish, pin or keep in step — the previous tools image had no digest on
-# install, which left this CronJob unrenderable and the control plane
-# unprotected.
+# EVERY CHECKPOINT PROVES ITS OWN DUMP RESTORES, IN THE SAME POD, BEFORE IT IS
+# SEALED AND UPLOADED (kn-drill-identity-u6il). The pod is three stages:
 #
-# ELIGIBILITY IS THE LAST WRITE, NOT THE FIRST. The entrypoint uploads the
-# ciphertext, reads it back by size, uploads the manifest, reads it back, and
-# only then publishes the status ConfigMap — so a run that dies halfway leaves
-# the previous eligible checkpoint as the newest one. A failed run can never
-# leave an older file posing as a new one.
+#   initContainer `dump`     the backend image dumps the database and writes the
+#                            server's own facts (row counts, roles, extensions,
+#                            major) into the scratch volume;
+#   initContainer `restore`  the CHART'S Postgres image loads that dump into a
+#                            scratch cluster on the same volume, writes the
+#                            restored row counts beside it, and records its
+#                            outcome;
+#   container `seal`         the backend image compares the counts, and only on
+#                            a match encrypts, uploads, reads the stored
+#                            ciphertext back, publishes the drill as passed and
+#                            the checkpoint as eligible. A dump that does not
+#                            restore publishes a FAILED drill, uploads nothing
+#                            and marks nothing eligible.
 #
-# THE POSTGRES IMAGE SURVIVES FOR ONE STAGE: the WEEKLY DRILL's restore. It
-# starts a scratch Postgres inside the pod (initdb/pg_ctl) and loads the
-# checkpoint into it, which needs a server, and the backend image carries a
-# client by design. Nothing else uses it.
+# WHY THIS REPLACED A SEPARATE WEEKLY DRILL JOB. That Job decrypted the newest
+# checkpoint with an `age` identity Secret, and no install ever wrote that
+# Secret (nothing in the CLI created it, and the fleet private key is printed
+# once and stored nowhere by design — T4.6), so the drill could never run and
+# the restore path was never exercised at all. Proving the PLAINTEXT restores
+# needs no private key on any host, and doing it in the pod that takes the
+# checkpoint means every nightly and every security-triggered checkpoint is
+# drilled rather than one a week. What it no longer proves, stated plainly:
+# that the FLEET private key opens the stored ciphertext. Opening a checkpoint
+# with the fleet key is part of a real recovery (T4.8/T4.9) and of the hardware
+# gate.
+#
+# ONE IMAGE FOR TWO THINGS, AND THE CHART'S POSTGRES FOR THE THIRD. The dump and
+# the seal are the backend image's own entrypoint
+# (`app/services/checkpoint_runner.py`), which is the image this chart already
+# pins by digest: it carries `pg_dump` (postgresql-client, the same major as the
+# Postgres above) and `age`, so there is no second image to build, publish, pin
+# or keep in step — the previous tools image had no digest on install, which
+# left this CronJob unrenderable and the control plane unprotected. The restore
+# needs a SERVER (initdb, pg_ctl) and the backend image carries a client by
+# design, so that one stage runs the pinned Postgres image.
+#
+# ELIGIBILITY IS THE LAST WRITE, NOT THE FIRST. The seal container uploads the
+# ciphertext, reads its SHA-256 back from the bucket, uploads the manifest, and
+# only then publishes the drill result and the eligibility marker — so a run
+# that dies halfway leaves the previous eligible checkpoint as the newest one. A
+# failed run can never leave an older file posing as a new one.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -52,18 +77,20 @@ metadata:
     app.kubernetes.io/component: checkpoint
 rules:
   # The status ConfigMap is the record of what is eligible and whether the
-  # restore drill passed. Read to merge (the drill must not erase the
-  # checkpoint's own fields), created when the namespace never had one, and
-  # PATCHED to publish — the entrypoint sends a merge patch of one key
+  # restore drill passed. Read to merge (the drill's result and the
+  # checkpoint's own fields are written one after the other and neither may
+  # erase the other), created when the namespace never had one, and PATCHED to
+  # publish — the entrypoint sends a merge patch of one key
   # (app/services/checkpoint_runner.py::_write_status), so `patch` is what it
   # needs and `update` is deliberately absent.
   #
   # NO `secrets` VERB, deliberately. This ServiceAccount used to carry one, and
-  # nothing on either path reads a Secret through the API server: the database
-  # password is an env secretKeyRef and the drill's identity is a mounted
-  # Secret, both of which the kubelet reads under the pod's own identity. A
-  # grant this account does not use is a way to read the fleet key from a Job
-  # that only ever needs to write one ConfigMap.
+  # nothing on this path reads a Secret through the API server: the database
+  # password and the object-store credentials are env secretKeyRefs, which the
+  # kubelet reads under the pod's own identity, and this pod decrypts nothing —
+  # the restore it runs is of its OWN dump, before the seal. A grant this
+  # account does not use is a way to read a credential from a Job that only
+  # ever needs to write one ConfigMap.
   - apiGroups: [""]
     resources: [configmaps]
     verbs: [get, create, patch]
@@ -118,29 +145,54 @@ metadata:
     {{- include "kubenest.labels" . | nindent 4 }}
     app.kubernetes.io/component: checkpoint
 data:
-  # THE DRILL'S ONLY SCRIPT, and the only stage that is not the backend image's
-  # entrypoint: the drill loads the checkpoint into a scratch Postgres inside
-  # the pod, and starting a server needs the server's own binaries.
+  # THE RESTORE STAGE, and the only stage that is not the backend image's
+  # entrypoint: loading the dump into a scratch Postgres in this pod needs the
+  # server's own binaries.
   restore.sh: |
-    set -euo pipefail
+    #!/bin/sh
+    set -uo pipefail
     scratch=/scratch
     export PGDATA="$scratch/pgdata"
-    # A SCRATCH CLUSTER INSIDE THE POD: the drill must not touch the running
-    # control plane's database, and it must not need a second Postgres.
-    initdb --auth=trust --username=postgres >/dev/null
-    pg_ctl -D "$PGDATA" -o "-c listen_addresses='' -c unix_socket_directories=$scratch" -w start
-    trap 'pg_ctl -D "$PGDATA" -m immediate stop >/dev/null 2>&1 || true' EXIT
-    createdb -h "$scratch" -U postgres restored
-    pg_restore -h "$scratch" -U postgres -d restored --no-owner --no-privileges "$scratch/control-plane.dump"
-    # THE SAME QUERY THE MANIFEST USED (app/services/checkpoint_runner.py,
+    # THE OUTCOME IS A FILE, NOT THIS SCRIPT'S EXIT STATUS. The seal container
+    # is what publishes a result, and an initContainer that exits non-zero
+    # stops the pod before it runs — so a restore that failed would leave the
+    # drill ABSENT rather than FAILED, which is exactly what an operator cannot
+    # act on ("did the Job run?"). Every failure below is recorded and the
+    # script then exits 0 so the seal stage can publish it; a failure that
+    # cannot even be recorded is published as failed too, because the seal
+    # stage treats a missing report as a failure.
+    result="$scratch/restore_result.txt"
+    report_failure() {
+      printf 'failed: %s\n' "$1" > "$result" 2>/dev/null || true
+    }
+    # THE SCRATCH CLUSTER IS REMOVED ON EVERY PATH, success or failure: the
+    # scratch volume is reused by the next checkpoint, and a data directory
+    # left behind makes that run's initdb refuse to start.
+    cleanup() {
+      pg_ctl -D "$PGDATA" -m immediate stop >/dev/null 2>&1 || true
+      rm -rf "$PGDATA"
+    }
+    trap cleanup EXIT
+
+    initdb --auth=trust --username=postgres >/dev/null 2>&1 \
+      || { report_failure "initdb could not create the scratch cluster"; exit 0; }
+    pg_ctl -D "$PGDATA" -o "-c listen_addresses='' -c unix_socket_directories=$scratch" -w start >/dev/null 2>&1 \
+      || { report_failure "the scratch cluster would not start"; exit 0; }
+    createdb -h "$scratch" -U postgres restored \
+      || { report_failure "createdb could not create the database the dump is restored into"; exit 0; }
+    pg_restore -h "$scratch" -U postgres -d restored --no-owner --no-privileges "$scratch/control-plane.dump" \
+      || { report_failure "pg_restore could not load the dump"; exit 0; }
+    # THE SAME QUERY THE DUMP STAGE USED (app/services/checkpoint_runner.py,
     # ROW_COUNTS_SQL). Exact counts, not pg_stat_user_tables' n_live_tup
-    # estimate: a drill that failed because autovacuum had not run yet would be
-    # a drill nobody trusts, and a drill that PASSED on estimates would not be
-    # comparing the rows.
+    # estimate: a restore that was refused because autovacuum had not run yet
+    # would be a checkpoint nobody trusts, and one that PASSED on estimates
+    # would not be comparing the rows.
     psql -h "$scratch" -U postgres -d restored -Atc \
       "SELECT relname || ' ' || (xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM %I.%I', schemaname, relname), false, true, '')))[1]::text FROM pg_stat_user_tables ORDER BY relname" \
-      > "$scratch/restored_row_counts.txt"
-    pg_ctl -D "$PGDATA" -m fast -w stop
+      > "$scratch/restored_row_counts.txt" \
+      || { report_failure "the restored row counts could not be read"; exit 0; }
+
+    printf 'ok\n' > "$result"
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -175,21 +227,20 @@ spec:
           securityContext:
             # The backend image runs as uid 1000 (app), and the scratch volume
             # is where the dump, its ciphertext and the manifest are written.
-            # 1000 is the backend image's own group, so the same value works
-            # for every container in both pods.
+            # 1000 is also the GROUP the restore stage runs with, because the
+            # kubelet gives every container in the pod this group on the volume
+            # — see that container's own securityContext for its uid.
             fsGroup: 1000
             fsGroupChangePolicy: OnRootMismatch
           {{- with .Values.imagePullSecrets }}
           imagePullSecrets:
             {{- toYaml . | nindent 8 }}
           {{- end }}
-          # ONE CONTAINER, ONE PROCESS, ONE ORDER. Dump, seal, upload and the
-          # eligibility write used to be four containers handing files to each
-          # other through the scratch volume, with busy-wait loops between them.
-          # They are one entrypoint now, so "the status is published last" is a
-          # property of a program rather than of a pod's container ordering.
-          containers:
-            - name: checkpoint
+          # THREE STAGES, IN THIS ORDER, because the proof has to come before
+          # the upload: initContainers are ordered, and the seal container is
+          # the only one that publishes anything.
+          initContainers:
+            - name: dump
               image: {{ $checkpoint | quote }}
               imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
               # `command`, not `args`: it REPLACES the image's entrypoint
@@ -197,7 +248,42 @@ spec:
               # MIGRATE_ON_START is not "false" — a checkpoint pod must never
               # write to the schema it is dumping. MIGRATE_ON_START is set
               # anyway, below, for the same reason the migration Job sets it.
-              command: ["python", "-m", "app.services.checkpoint_runner", "run"]
+              command: ["python", "-m", "app.services.checkpoint_runner", "dump"]
+              env:
+                {{- include "kubenest.checkpoint.env" . | nindent 16 }}
+              volumeMounts:
+                - name: scratch
+                  mountPath: /scratch
+            - name: restore
+              image: {{ $postgres | quote }}
+              imagePullPolicy: IfNotPresent
+              # No environment: this stage loads the dump into a cluster of its
+              # own over a unix socket in the scratch volume, so it needs
+              # neither the control plane's database nor the object store, and
+              # a stage that cannot reach a credential cannot leak one.
+              command: ["/scripts/restore.sh"]
+              securityContext:
+                # uid 26 IS THIS IMAGE'S OWN `postgres` USER, and both numbers
+                # matter. `command` replaces the image's entrypoint, so the
+                # nss_wrapper that entrypoint sets up never runs — and without
+                # it the image's declared USER (1001) has no /etc/passwd entry,
+                # so `initdb` refuses with "could not look up effective user ID
+                # 1001: user does not exist" (measured against the digest at
+                # postgresql.image.digest, whose /etc/passwd holds
+                # `postgres:x:26`). The GROUP is the pod's fsGroup, because the
+                # kubelet makes the scratch volume 0770 root:fsGroup: a
+                # container in another group cannot write the data directory
+                # this stage has to create.
+                runAsUser: 26
+                runAsGroup: 1000
+                runAsNonRoot: true
+              volumeMounts:
+                {{- include "kubenest.checkpoint.mounts" . | nindent 16 }}
+          containers:
+            - name: seal
+              image: {{ $checkpoint | quote }}
+              imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+              command: ["python", "-m", "app.services.checkpoint_runner", "seal"]
               env:
                 {{- include "kubenest.checkpoint.env" . | nindent 16 }}
               resources:
@@ -206,13 +292,19 @@ spec:
                 - name: scratch
                   mountPath: /scratch
           volumes:
+            - name: scripts
+              configMap:
+                name: {{ .Release.Name }}-checkpoint-scripts
+                defaultMode: 0555
             - name: scratch
               persistentVolumeClaim:
                 claimName: {{ $scratch }}
 ---
 # DEDICATED SCRATCH STORAGE. Not an emptyDir: the dump of a customer's whole
 # control plane does not belong on the node's disk, where a full node evicts
-# the pod mid-dump and leaves a partial file behind.
+# the pod mid-dump and leaves a partial file behind. It is also where the
+# restore stage starts its scratch cluster, which is why one claim is enough
+# for the whole pod and there is no second one.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -229,113 +321,4 @@ spec:
   {{- with .Values.checkpoint.scratch.storageClassName }}
   storageClassName: {{ . | quote }}
   {{- end }}
----
-# The drill gets its OWN scratch volume: both CronJobs are ReadWriteOnce and
-# the drill's `initdb` would otherwise wipe a dump that is still being taken.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ $drillScratch }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "kubenest.labels" . | nindent 4 }}
-    app.kubernetes.io/component: checkpoint
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: {{ .Values.checkpoint.scratch.size }}
-  {{- with .Values.checkpoint.scratch.storageClassName }}
-  storageClassName: {{ . | quote }}
-  {{- end }}
----
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: {{ .Release.Name }}-checkpoint-drill
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "kubenest.labels" . | nindent 4 }}
-    app.kubernetes.io/component: checkpoint
-spec:
-  schedule: {{ .Values.checkpoint.drillSchedule | quote }}
-  concurrencyPolicy: Forbid
-  startingDeadlineSeconds: 3600
-  successfulJobsHistoryLimit: 2
-  failedJobsHistoryLimit: 2
-  jobTemplate:
-    spec:
-      backoffLimit: 0
-      ttlSecondsAfterFinished: {{ mul .Values.checkpoint.retentionHours 3600 }}
-      template:
-        metadata:
-          labels:
-            app.kubernetes.io/component: checkpoint
-            app.kubernetes.io/instance: {{ .Release.Name }}
-            kubenest.io/purpose: restore-drill
-        spec:
-          restartPolicy: Never
-          serviceAccountName: {{ .Release.Name }}-checkpoint
-          securityContext:
-            fsGroup: 1000
-            fsGroupChangePolicy: OnRootMismatch
-          {{- with .Values.imagePullSecrets }}
-          imagePullSecrets:
-            {{- toYaml . | nindent 8 }}
-          {{- end }}
-          # THREE STAGES, IN ORDER, because initContainers are ordered and the
-          # single app container is the one that records the result: fetch and
-          # open the newest eligible checkpoint, load it into a scratch
-          # Postgres, then compare what was restored with what the manifest
-          # declared.
-          initContainers:
-            - name: fetch
-              image: {{ $checkpoint | quote }}
-              imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
-              command: ["python", "-m", "app.services.checkpoint_runner", "drill-fetch"]
-              env:
-                {{- include "kubenest.checkpoint.env" . | nindent 16 }}
-                # The drill's DECRYPTION key, held by the control plane's own
-                # Secret and by nobody else on the host. A drill that cannot
-                # decrypt is a drill that proves nothing.
-                - name: CHECKPOINT_IDENTITY
-                  value: /checkpoint-identity/identity.txt
-              volumeMounts:
-                - name: scratch
-                  mountPath: /scratch
-                - name: identity
-                  mountPath: /checkpoint-identity
-                  readOnly: true
-            - name: restore
-              image: {{ $postgres | quote }}
-              imagePullPolicy: IfNotPresent
-              command: ["/scripts/restore.sh"]
-              env:
-                {{- include "kubenest.checkpoint.env" . | nindent 16 }}
-              volumeMounts:
-                {{- include "kubenest.checkpoint.mounts" . | nindent 16 }}
-          containers:
-            - name: verify
-              image: {{ $checkpoint | quote }}
-              imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
-              command: ["python", "-m", "app.services.checkpoint_runner", "drill-verify"]
-              env:
-                {{- include "kubenest.checkpoint.env" . | nindent 16 }}
-              resources:
-                {{- toYaml .Values.checkpoint.resources | nindent 16 }}
-              volumeMounts:
-                - name: scratch
-                  mountPath: /scratch
-          volumes:
-            - name: scripts
-              configMap:
-                name: {{ .Release.Name }}-checkpoint-scripts
-                defaultMode: 0555
-            - name: scratch
-              persistentVolumeClaim:
-                claimName: {{ $drillScratch }}
-            - name: identity
-              secret:
-                secretName: {{ .Values.checkpoint.identitySecret }}
-                optional: false
 {{- end }}
