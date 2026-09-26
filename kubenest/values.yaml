@@ -122,6 +122,27 @@ backend:
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
     pullPolicy: IfNotPresent
+  # -- HELD BACKEND IMAGE. Empty on every install and every ordinary upgrade, and
+  # set only by `kubenest platform upgrade --control-plane` while its fence is up
+  # (pkg/controlplane's FenceValues, and the failed-migration restore).
+  #
+  # It holds THIS DEPLOYMENT on the code the control plane ran before an upgrade,
+  # so that the apply raising the fence cannot roll the new chart's image before
+  # the migration, and so that a control plane whose migration failed serves the
+  # code its schema matches.
+  #
+  # ONLY THIS DEPLOYMENT READS IT, which is the whole point: `backend.image` is
+  # also the image the checkpoint CronJob and the migration Job run, and their
+  # COMMANDS are this chart's, so holding them on an older image runs a command
+  # that image does not have. On 2026-09-26 the checkpoint's `dump` container did
+  # exactly that (`usage: python -m app.services.checkpoint_runner ...`) and the
+  # upgrade died at the checkpoint stage
+  # (kn-t70-control-plane-version-identity-4xso.5).
+  #
+  # A reference here is repository/tag/digest in the same shape as backend.image,
+  # and templates/_helpers.tpl "kubenest.image" renders it the same way. The pull
+  # policy is the held pin's own, or backend.image's when it names none.
+  heldImage: {}
   replicas: 1
   resources:
     requests:

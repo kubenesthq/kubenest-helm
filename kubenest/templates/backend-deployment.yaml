@@ -41,8 +41,25 @@ spec:
       # revision matches the code's.
       containers:
         - name: backend
-          image: "{{ include "kubenest.image" .Values.backend.image }}"
-          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          # HELD ON THE CODE THE CONTROL PLANE RAN BEFORE THIS UPGRADE, when the
+          # CLI is holding it: backend.heldImage is set by a fence raise and by a
+          # failed migration's restore, so that neither roll this Deployment onto
+          # code that has never been migrated — and so that a control plane whose
+          # migration failed serves the code its schema matches.
+          #
+          # ONLY THIS CONTAINER READS IT. The Jobs rendered from these templates
+          # run backend.image, the chart's own pin, because their commands are
+          # this chart's (kn-t70-control-plane-version-identity-4xso.5).
+          #
+          # ONE image: line and ONE imagePullPolicy: line, chosen in variables: a
+          # second pair inside a conditional is two keys in the same mapping, and
+          # the chart's own tests parse this template with the actions replaced.
+          {{- $backendImage := .Values.backend.image }}
+          {{- if .Values.backend.heldImage.repository }}
+          {{- $backendImage = .Values.backend.heldImage }}
+          {{- end }}
+          image: "{{ include "kubenest.image" $backendImage }}"
+          imagePullPolicy: {{ $backendImage.pullPolicy | default .Values.backend.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 8000
