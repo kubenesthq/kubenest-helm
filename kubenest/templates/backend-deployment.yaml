@@ -103,6 +103,12 @@ spec:
             # Defaults to the hub hostname the Gateway publishes.
             - name: HUB_PUBLIC_URL
               value: {{ .Values.hub.publicURL | default (printf "wss://hub.%s" .Values.domain) | quote }}
+            # The console the Gateway publishes. The backend allows browser calls
+            # from it, and sends `kubenest login` there to approve a device
+            # code (it uses the first origin). Unset, both fall back to
+            # http://localhost:3000.
+            - name: CORS_ORIGINS
+              value: {{ printf "https://%s" (include "kubenest.ui.host" .) | quote }}
             - name: HUB_AUTH_TOKEN
               valueFrom:
                 secretKeyRef:
