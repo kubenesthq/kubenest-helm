@@ -116,8 +116,13 @@ backend:
     # 279b285 runs the checkpoint as the dump and seal stages around this
     # chart's restore stage, so each checkpoint proves it restores before it
     # is sealed and no drill key is needed (kn-drill-identity-u6il).
-    tag: "279b285"
-    digest: "sha256:9425657f5be8ef911262f511feb505a2d0cdf7bdf5fb55ad5a99bb2e58e0ad07"
+    # 60ba66a serves bundle 1.2 (kn-t72), raises the revocation floor on a
+    # re-mint (kn-t49...uzka.1), stores the hub's microsecond connection epoch
+    # (kn-a3x0), beats the customer's heartbeat URL (kn-t28), records a
+    # recovered cluster's incarnation (kn-t49) and mints the operator chart from
+    # the requested bundle (kn-t72...0xx7.1).
+    tag: "60ba66a"
+    digest: "sha256:bc5c63c66ec92fdbf7c7f39d79d6b09b2647b8789305af6d31acdd5149d2c624"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
