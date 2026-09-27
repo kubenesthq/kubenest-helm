@@ -121,8 +121,10 @@ backend:
     # (kn-a3x0), beats the customer's heartbeat URL (kn-t28), records a
     # recovered cluster's incarnation (kn-t49) and mints the operator chart from
     # the requested bundle (kn-t72...0xx7.1).
-    tag: "60ba66a"
-    digest: "sha256:bc5c63c66ec92fdbf7c7f39d79d6b09b2647b8789305af6d31acdd5149d2c624"
+    # 90480e2 lets a CLI token carrying clusters:rotate rotate an agent token
+    # (kn-t48...prao.1).
+    tag: "90480e2"
+    digest: "sha256:74b0d217d0cb0a984c517dd901aef6caec64c91eec254868aa1cdf5b47c9cb6d"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
