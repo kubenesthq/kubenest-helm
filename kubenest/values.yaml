@@ -123,8 +123,11 @@ backend:
     # the requested bundle (kn-t72...0xx7.1).
     # 90480e2 lets a CLI token carrying clusters:rotate rotate an agent token
     # (kn-t48...prao.1).
-    tag: "90480e2"
-    digest: "sha256:74b0d217d0cb0a984c517dd901aef6caec64c91eec254868aa1cdf5b47c9cb6d"
+    # 68232ee accepts the recovery stages in the install journal, so a
+    # recovered control plane can record the cluster it was rebuilt as
+    # (kn-t48...prao.2; S11 on lab demo, 2026-09-28).
+    tag: "68232ee"
+    digest: "sha256:35fbd8cf95cbef5fc3fc89cb9d279ab55d187640feeb1353323639eb01a7a43d"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
@@ -187,8 +190,11 @@ hub:
     # 120baa5 (2026-09-25): the first hub that verifies agents with
     # AGENT_JWT_SECRET (it no longer reads JWT_SECRET, so an older hub crashes
     # under this chart) and understands the maintenance-window events.
-    tag: "120baa5"
-    digest: "sha256:ccb444ae8e35d107bc7a89dd32f0c89f69aa33fdb3bbb649679040ba48557cf5"
+    # 0e0d904 (2026-09-28): stamps the operator connection epoch the backend
+    # stores (kn-a3x0) and accepts every install stage the contract names,
+    # including the recovery stages (kn-t48...prao.2).
+    tag: "0e0d904"
+    digest: "sha256:6119340ef4563b9f17eab3f15728db288dbf252b5fbad88b5ec3abd51ca3deaf"
     pullPolicy: IfNotPresent
   replicas: 1
   resources:
