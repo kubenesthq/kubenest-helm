@@ -123,11 +123,13 @@ backend:
     # the requested bundle (kn-t72...0xx7.1).
     # 90480e2 lets a CLI token carrying clusters:rotate rotate an agent token
     # (kn-t48...prao.1).
-    # 68232ee accepts the recovery stages in the install journal, so a
-    # recovered control plane can record the cluster it was rebuilt as
-    # (kn-t48...prao.2; S11 on lab demo, 2026-09-28).
-    tag: "68232ee"
-    digest: "sha256:35fbd8cf95cbef5fc3fc89cb9d279ab55d187640feeb1353323639eb01a7a43d"
+    # 709b710 re-delivers a cluster's projects when a new incarnation is
+    # recorded, so a rebuilt cluster receives its Project CRs and a recovery
+    # can restore into them (kn-t49...uzka.4; S6 on lab s6, 2026-09-28). It
+    # is 68232ee plus that one commit; 68232ee accepts the recovery stages
+    # in the install journal (kn-t48...prao.2).
+    tag: "709b710"
+    digest: "sha256:1e6846c107050754a50c09ff8f4893815f8b357eb60d414a694209e8dd228d49"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
