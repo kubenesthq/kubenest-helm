@@ -128,8 +128,11 @@ backend:
     # can restore into them (kn-t49...uzka.4; S6 on lab s6, 2026-09-28). It
     # is 68232ee plus that one commit; 68232ee accepts the recovery stages
     # in the install journal (kn-t48...prao.2).
-    tag: "709b710"
-    digest: "sha256:1e6846c107050754a50c09ff8f4893815f8b357eb60d414a694209e8dd228d49"
+    # 59f4ec3 is 709b710 plus the bundle 1.2 catalog's move to operator
+    # candidate 2.7.0-rc.2 (image c79248b), so a 1.2 mint hands out rc.2
+    # (kn-t71...ea7h).
+    tag: "59f4ec3"
+    digest: "sha256:fe2aba5b5b529d8e9da3c7acaea59e5f2f64cd7bd63b44479906762ab1011812"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
