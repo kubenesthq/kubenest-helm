@@ -131,8 +131,12 @@ backend:
     # 59f4ec3 is 709b710 plus the bundle 1.2 catalog's move to operator
     # candidate 2.7.0-rc.2 (image c79248b), so a 1.2 mint hands out rc.2
     # (kn-t71...ea7h).
-    tag: "59f4ec3"
-    digest: "sha256:fe2aba5b5b529d8e9da3c7acaea59e5f2f64cd7bd63b44479906762ab1011812"
+    # 95b9243 is 59f4ec3 plus two catalog moves: traefik chart 42.2.0
+    # (Traefik v3.7.16) in bundles 1.0-1.2 (kn-0btw), and bundle 1.2's agent
+    # to operator candidate 2.7.0-rc.3 (image 8d7ddef), whose operator records
+    # scheduled backups in the recovery set (kn-ke7k).
+    tag: "95b9243"
+    digest: "sha256:e30f8812ae2aee5faf7fde1fe2ed77aa179635a7e540ca24879120aceac204e5"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
