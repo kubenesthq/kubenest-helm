@@ -139,8 +139,10 @@ backend:
     # candidate 2.7.0-rc.4 (image 9782119), whose operator writes no coverage
     # record for a backup synced from the bucket and carries the record in
     # each recovery-set entry (kn-jl7n).
-    tag: "669244c"
-    digest: "sha256:017ab3bff4649eda374fcdf1704d4ddcecc104113d80d635ffe8f598e61cc224"
+    # e3e4b0a is 669244c plus one fix: the operator's 30s status report
+    # re-sends a maintenance window that missed its first delivery (kn-oymc).
+    tag: "e3e4b0a"
+    digest: "sha256:eb1186db6c173f2607c08c1fb652d045f19d1cc2062bf65f34f01ba9e8086045"
     # IfNotPresent, coherent with a digest. Always + a digest is merely
     # wasteful; Always + a mutable tag was the defect. This matches what the
     # provisioner does after kn-provisioner-untraceable-pin-m1b2.
